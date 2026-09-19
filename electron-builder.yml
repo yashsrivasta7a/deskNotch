@@ -1,0 +1,18 @@
+appId: com.devezio.desknotch
+productName: deskNotch
+copyright: Copyright © 2026 Devezio.tech
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+publish: null
+win:
+  target: nsis
+  icon: resources/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

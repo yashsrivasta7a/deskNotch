@@ -1,0 +1,35 @@
+{
+  "private": true,
+  "name": "desknotch",
+  "productName": "deskNotch",
+  "description": "deskNotch is an app for Windows that gives you a notch, just like the Apple devices",
+  "version": "1.0.0",
+  "author": "Devezio.tech",
+  "copyright": "Copyright © 2026 Devezio.tech",
+  "appId": "com.devezio.desknotch",
+  "type": "module",
+  "main": "app/main.js",
+  "scripts": {
+    "dev": "node scripts/patch-nextron.cjs && nextron",
+    "build": "nextron build",
+    "clean:port": "npx --yes kill-port 8888",
+    "postinstall": "electron-builder install-app-deps && node scripts/patch-nextron.cjs"
+  },
+  "dependencies": {
+    "electron-serve": "^3.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.14",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "next": "^16.3.0",
+    "nextron": "^10.3.0",
+    "postcss": "^8.5.26",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
+  }
+}
