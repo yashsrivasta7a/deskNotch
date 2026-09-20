@@ -16,30 +16,3 @@ nextjs-portal,
 #__next-build-watcher {
   display: none !important;
 }
-
-@keyframes eq-bar-1 {
-  0%, 100% { height: 3px; }
-  50% { height: 11px; }
-}
-
-@keyframes eq-bar-2 {
-  0%, 100% { height: 10px; }
-  50% { height: 4px; }
-}
-
-@keyframes eq-bar-3 {
-  0%, 100% { height: 5px; }
-  50% { height: 12px; }
-}
-
-.animate-eq-1 {
-  animation: eq-bar-1 0.9s ease-in-out infinite;
-}
-
-.animate-eq-2 {
-  animation: eq-bar-2 0.7s ease-in-out infinite;
-}
-
-.animate-eq-3 {
-  animation: eq-bar-3 1.1s ease-in-out infinite;
-}
