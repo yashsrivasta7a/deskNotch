@@ -288,11 +288,96 @@ properties, no namespaces.
 
 ---
 
+## 5. Hit testing, because the window is not the notch
+
+The strip spans the whole width of the screen, so what it does with clicks
+matters more than it would for an ordinary window.
+
+`setIgnoreMouseEvents(false)` hands clicks to the **entire window**, not to
+whatever is currently drawn. Toggling it on hover therefore made the full
+strip swallow clicks meant for the title bars and menus underneath — a bug
+that only shows up once the notch is pinned open and the user tries to click
+somewhere else.
+
+So the window now stays click-through permanently. The renderer reports the
+notch's rectangle with a `ResizeObserver` — the shell springs between sizes, so
+its bounds are only final once the animation settles — and the main process
+polls the cursor against it every 60ms, taking clicks only while the pointer is
+actually over the notch.
+
+60ms is under the threshold where a click feels like it missed, and cheap
+enough to leave running.
+
+### Keyboard focus follows the pin, not the hover
+
+The window has to be focusable for text fields inside it to accept typing.
+Focusing on hover would then steal focus from whatever the user was typing in
+elsewhere, so focus is taken only when the notch is pinned — which is also the
+only time there is anything to type into.
+
+---
+
+## 6. Views
+
+Everything cannot share one row. Music, tasks, the calendar, a photo and
+settings would each be a sliver.
+
+The notch holds several views instead, with a rail to switch between them, and
+each view sets the shell size it needs. The rail is fixed to the right of the
+expanded panel rather than the collapsed bar, so the button just used does not
+move when the view changes.
+
+Settings sits below the rail, separated from it: it opens a panel, it is not a
+place to be, and grouping it with the views would say otherwise.
+
+### What the glance row shows is a setting
+
+The zones are built from a list rather than fixed grid columns, so switching
+one off closes its column and the shell shrinks to fit. A hidden panel leaves
+no gap.
+
+### One list, one copy
+
+Tasks appear in both the glance row and the Tasks view. Both read and write the
+same `useTasks` hook — two components each loading their own copy drift apart
+the moment either changes.
+
+---
+
+## 7. Where main-process code lives
+
+```
+main/
+  main.ts           window, hit testing, lifecycle
+  preload.ts        the renderer's bridge
+  store.ts          the JSON file, and nothing else
+  smtc.ts           media host
+  smtc-worker.ts    media worker
+  ipc/
+    index.ts        registers every handler
+    store.ts        get/set
+    photo.ts        the file picker
+    system.ts       memory and uptime
+    settings.ts     start-on-boot
+```
+
+`store.ts` had grown to hold the file, a photo picker, system stats and a login
+item — four unrelated things behind one name. It now owns only the file, and
+exports `readStore`/`writeStore` for features that happen to persist something.
+
+A new handler means a new file in `ipc/` and one line in its index. Nothing
+else is touched, and no file grows because a feature had nowhere else to go.
+
+---
+
 ## Quick reference
 
 - **Notch appearance and animation** → `renderer/components/notch/NotchChassis.tsx`, hot-reloads.
 - **Now playing** → `main/smtc-worker.ts` (worker), `main/smtc.ts` (main),
   `renderer/hooks/useNowPlaying.ts` (renderer).
+- **A new IPC handler** → a file in `main/ipc/`, plus one line in its index.
+- **Corner radius** → the tokens at the top of `renderer/styles/globals.css`.
+- **Glass surfaces** → the `.glass` and `.glass-control` classes in the same file.
 - **Strip height, always-on-top, click-through** → `main/main.ts`, needs a restart.
 - **`npm run dev:norestart`** → rebuilds `main/` on save without relaunching Electron.
 - **App won't start, `Cannot read properties of undefined (reading 'whenReady')`** →

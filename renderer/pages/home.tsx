@@ -52,14 +52,8 @@ const SIZES: Record<string, { width: number; height: number }> = {
 
 export default function HomePage() {
   const nowPlaying = useNowPlaying()
-  // The shell picks up its colour from whatever is playing, so the notch is
-  // never quite the same twice.
   const albumTint = useDominantColor(nowPlaying?.thumbnailUrl)
-  // Owned here, not in the card: the notch unmounts its expanded content when
-  // it collapses, which would otherwise wipe a running countdown.
   const timer = useTimer()
-  // One list, shared by both views: ticking something in the glance row and
-  // opening the Tasks view must show the same thing.
   const tasks = useTasks()
   const [view, setView] = useState('glance')
 
@@ -79,16 +73,11 @@ export default function HomePage() {
   useEffect(() => {
     if (!settingsLoaded.current) return
     void window.bridge?.invoke('store:set', 'settings', settings)
-    // Start-on-boot has to be applied to the OS, not just remembered.
     void window.bridge?.invoke('settings:start-on-boot', settings.startOnBoot)
   }, [settings])
 
-  // Falling back to plain white keeps every tinted surface working when the
-  // setting is off, rather than needing a branch at each use.
   const tint = settings.albumTint ? albumTint : '255, 255, 255'
 
-  // Each zone carries its own column width, so the grid rebuilds itself when
-  // one is switched off.
   const glanceZones = [
     settings.showMusic && {
       id: 'music',
@@ -116,7 +105,6 @@ export default function HomePage() {
     },
   ].filter(Boolean) as { id: string; width: string; node: React.ReactNode }[]
 
-  // The shell shrinks with its contents rather than leaving empty space.
   const glanceWidth = glanceZones.reduce((total, zone) => {
     if (zone.id === 'music') return total + 290
     if (zone.id === 'tasks') return total + 150
@@ -134,10 +122,6 @@ export default function HomePage() {
       <Head>
         <title>deskNotch</title>
       </Head>
-
-      {/* The strip window spans the top of the screen. Only the notch itself is
-          visible or interactive; everything else must stay transparent and pass
-          pointer events through. */}
       <div className="w-full h-full flex justify-center items-start pointer-events-none">
         <div className="pointer-events-auto">
           <NotchChassis
@@ -154,63 +138,63 @@ export default function HomePage() {
             expandedContent={
               <div className="flex h-full items-stretch gap-3">
                 <div className="flex-1 min-w-0">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={view}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.16 }}
-                  className="h-full"
-                >
-                  {view === 'glance' ? (
-                    // One surface, divided by hairlines rather than cards —
-                    // panels inside a panel read as clutter at this size. The
-                    // zones come from settings, so hiding one closes its
-                    // column instead of leaving a gap.
-                    <div
-                      className="relative grid h-full items-start gap-6 pt-1"
-                      style={{ gridTemplateColumns: glanceZones.map((z) => z.width).join(' ') }}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={view}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.16 }}
+                      className="h-full"
                     >
-                      {/* Light bleeding from behind the notch, tinted by the
+                      {view === 'glance' ? (
+                        // One surface, divided by hairlines rather than cards —
+                        // panels inside a panel read as clutter at this size. The
+                        // zones come from settings, so hiding one closes its
+                        // column instead of leaving a gap.
+                        <div
+                          className="relative grid h-full items-start gap-6 pt-1"
+                          style={{ gridTemplateColumns: glanceZones.map((z) => z.width).join(' ') }}
+                        >
+                          {/* Light bleeding from behind the notch, tinted by the
                           album art. Keeps the surface from reading as a flat
                           black rectangle without adding a single border. */}
-                      <motion.div
-                        aria-hidden
-                        className="pointer-events-none absolute -inset-x-6 -top-10 h-24 -z-10 blur-2xl"
-                        animate={{
-                          background: `radial-gradient(55% 100% at 20% 0%, rgba(${tint}, 0.13), transparent 72%)`,
-                        }}
-                        transition={{ duration: 0.9 }}
-                      />
+                          <motion.div
+                            aria-hidden
+                            className="pointer-events-none absolute -inset-x-6 -top-10 h-24 -z-10 blur-2xl"
+                            animate={{
+                              background: `radial-gradient(55% 100% at 20% 0%, rgba(${tint}, 0.13), transparent 72%)`,
+                            }}
+                            transition={{ duration: 0.9 }}
+                          />
 
-                      {glanceZones.map((zone, index) => (
-                        <div
-                          key={zone.id}
-                          className={
-                            index === 0
-                              ? 'min-w-0'
-                              : `relative h-[76px] flex items-start pl-6 min-w-0
+                          {glanceZones.map((zone, index) => (
+                            <div
+                              key={zone.id}
+                              className={
+                                index === 0
+                                  ? 'min-w-0'
+                                  : `relative h-[76px] flex items-start pl-6 min-w-0
                                  before:absolute before:left-0 before:top-2
                                  before:h-14 before:w-px
                                  before:bg-gradient-to-b before:from-transparent
                                  before:via-white/[0.07] before:to-transparent`
-                          }
-                        >
-                          {zone.node}
+                              }
+                            >
+                              {zone.node}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  ) : view === 'settings' ? (
-                    <SettingsPanel settings={settings} onChange={setSettings} />
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3 h-full">
-                      <TodoCard store={tasks} />
-                      <TimerCard timer={timer} />
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+                      ) : view === 'settings' ? (
+                        <SettingsPanel settings={settings} onChange={setSettings} />
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3 h-full">
+                          <TodoCard store={tasks} />
+                          <TimerCard timer={timer} />
+                        </div>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
 
                 {/* Same gradient hairline the zones use — a solid rule reads

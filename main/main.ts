@@ -2,7 +2,7 @@ import path from 'path'
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import serve from 'electron-serve'
 import { startSmtc, stopSmtc } from './smtc'
-import { registerStore } from './store'
+import { registerIpc } from './ipc'
 
 const isProd = process.env.NODE_ENV === 'production'
 
@@ -97,7 +97,7 @@ app.whenReady().then(async () => {
     await mainWindow.loadURL(`http://localhost:${port}/home`)
   }
 
-  registerStore()
+  registerIpc()
   startSmtc(mainWindow)
 })
 

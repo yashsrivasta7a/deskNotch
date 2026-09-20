@@ -141,7 +141,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
         }}
         transition={spring}
         className="relative w-full h-full bg-black text-white overflow-hidden flex flex-col
-                   border-b border-x border-white/[0.07]
+                   border-b border-x border-white/[0.07] border-t-0
                    shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9),inset_0_-1px_1px_rgba(255,255,255,0.05)]"
         style={{
           borderTopLeftRadius: 0,
@@ -150,12 +150,6 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
         }}
       >
         {ambient?.(isOpen)}
-
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-px
-                     bg-gradient-to-r from-transparent via-white/[0.14] to-transparent"
-        />
 
         <div
           onClick={() => setIsPinned((pinned) => !pinned)}

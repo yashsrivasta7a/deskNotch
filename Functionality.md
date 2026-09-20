@@ -18,6 +18,7 @@ rather than controls.
 - [x] **Now playing** — current track, with album art in the collapsed bar.
 - [ ] **Weather icon** — current conditions at the user's location.
 - [ ] **Timer** — remaining time, shown only while a timer is running.
+- [x] **Task count** — pending tasks, shown in the collapsed bar when any exist.
 - [ ] **Headphone icon** — shown when headphones are connected.
 - [ ] **Battery** — charge level and charging state.
 - [ ] **Bluetooth device battery** — headphones, mouse, controller.
@@ -29,9 +30,11 @@ Shown when the notch opens. Room for real controls.
 - [~] **Media controls** — album art, progress and buttons are built; the buttons
   are not wired up yet. See the caveat below.
 - [ ] **Volume slider**
-- [ ] **Calendar** — upcoming events.
-- [ ] **Timer / stopwatch**
-- [ ] **Notes / todos**
+- [~] **Calendar** — the week, scrollable a day at a time. Events are not
+  wired to a source yet, so it shows dates only.
+- [x] **Timer** — presets plus a free-entry field, digits on a rolling counter.
+- [ ] **Stopwatch**
+- [x] **Todos** — add, complete and clear, persisted to disk.
 - [ ] **Clipboard history**
 - [ ] **Weather** — fuller forecast than the collapsed icon.
 - [ ] **Screenshot tools**
@@ -42,12 +45,23 @@ Shown when the notch opens. Room for real controls.
 
 All of these are settings, not hardcoded behaviour.
 
+- [x] **Views** — the notch holds several screens (glance, tasks, settings) with
+  a rail to switch between them, rather than one crowded row.
+- [x] **Pin open** — clicking the collapsed bar holds the notch open, so it does
+  not close while typing or reading.
+- [x] **Click-through** — the strip only takes clicks over the notch itself;
+  everything else passes through to the window underneath.
+- [x] **Ambient glow** — a looping light along the bottom edge while music plays.
+- [x] **Album tint** — the shell picks up colour from the current artwork.
+
 - [ ] **Auto-expand on event** — opens on a finished timer or an alarm. Togglable.
-- [ ] **Multi-monitor support** — which display the notch lives on.
-- [ ] **Startup on boot**
+- [ ] **Multi-monitor support** — the notch is pinned to the primary display
+  and does not follow a change of monitor.
+- [x] **Startup on boot** — registers with Windows via `setLoginItemSettings`.
 - [ ] **Hide on fullscreen** — stays out of the way during video and games.
 - [ ] **Tray icon + quit** — the app is frameless, so this is the only way out.
-- [ ] **Settings panel** — where everything above is configured.
+- [x] **Settings panel** — which panels appear in the glance row, plus
+  appearance and start-on-boot.
 - [ ] **Keyboard shortcut to open** — the notch is hover-only otherwise, so there
   is no way to reach it without the mouse.
 
