@@ -33,26 +33,26 @@ const STRIKE_STYLE: CSSProperties = {
   WebkitBoxDecorationBreak: "clone",
 };
 
-// the check is one line box tall at every size, so it sits on the first line
+// the check is vertically aligned with the first line of text
 const SIZES = {
   sm: {
-    row: "gap-2.5 rounded-xl px-3 py-2",
-    check: "h-5 w-5",
-    text: "text-[13px] leading-5",
+    row: "gap-2 rounded-xl px-2.5 py-1.5",
+    check: "h-4 w-4 shrink-0 mt-[1px]",
+    text: "text-[12px] leading-[18px]",
     line: "1.5px",
     list: "gap-1.5",
   },
   md: {
-    row: "gap-3 rounded-[14px] px-3.5 py-2.5",
-    check: "h-6 w-6",
-    text: "text-[15px] leading-6",
+    row: "gap-2.5 rounded-[12px] px-3 py-2",
+    check: "h-5 w-5 shrink-0 mt-[1px]",
+    text: "text-[13px] leading-[20px]",
     line: "2px",
     list: "gap-2",
   },
   lg: {
-    row: "gap-3.5 rounded-2xl px-4 py-3",
-    check: "h-7 w-7",
-    text: "text-[17px] leading-7",
+    row: "gap-3 rounded-2xl px-3.5 py-2.5",
+    check: "h-6 w-6 shrink-0 mt-[1.5px]",
+    text: "text-[15px] leading-[22px]",
     line: "2.5px",
     list: "gap-2.5",
   },
@@ -77,8 +77,8 @@ const STRUCK: Stage[] = ["strike", "nudge", "settled"];
 
 const ACCENT_VAR = "--task-accent";
 const CARD =
-  "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04),0_3px_10px_rgba(0,0,0,0.06)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_18px_rgba(0,0,0,0.09)] active:brightness-95 dark:bg-[#1F1F1F] dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_3px_10px_rgba(0,0,0,0.3)] dark:hover:shadow-[0_1px_2px_rgba(0,0,0,0.45),0_6px_18px_rgba(0,0,0,0.4)] dark:active:brightness-110";
-const FOCUS = `outline-none focus-visible:ring-2 focus-visible:ring-[var(${ACCENT_VAR})] focus-visible:ring-offset-2`;
+  "bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] shadow-sm backdrop-blur-sm transition-all";
+const FOCUS = `outline-none focus-visible:ring-1.5 focus-visible:ring-[var(${ACCENT_VAR})]/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black`;
 
 function useTiming() {
   const reduced = useReducedMotion() ?? false;
@@ -101,7 +101,7 @@ function TaskCheck({
       viewBox="0 0 24 24"
       aria-hidden
       className={cn(
-        "shrink-0 text-neutral-300 dark:text-neutral-600",
+        "shrink-0 block text-neutral-300 dark:text-neutral-500",
         SIZES[size].check,
       )}
       initial={false}
@@ -162,15 +162,14 @@ function TaskLabel({
   const { text, line } = SIZES[size];
 
   return (
-    <span className="min-w-0 flex-1">
+    <span className={cn("min-w-0 flex-1 block text-left", text)} title={label}>
       <motion.span
         style={STRIKE_STYLE}
         className={cn(
-          "font-medium tracking-[-0.01em] transition-colors duration-300",
-          text,
+          "inline font-medium tracking-[-0.01em] transition-colors duration-300 break-words [overflow-wrap:anywhere] whitespace-normal",
           struck
-            ? "text-neutral-400 dark:text-neutral-500"
-            : "text-neutral-800 dark:text-neutral-100",
+            ? "text-white/35"
+            : "text-white/90",
         )}
         initial={false}
         animate={{ backgroundSize: `${struck ? 100 : 0}% ${line}` }}
@@ -184,7 +183,7 @@ function TaskLabel({
 }
 
 export type TaskItemProps = Omit<
-  ComponentProps<"button">,
+  ComponentProps<"div">,
   "onAnimationStart" | "onDrag" | "onDragStart" | "onDragEnd"
 > & {
   label: string;
@@ -193,6 +192,7 @@ export type TaskItemProps = Omit<
   size?: TaskSize;
   accent?: string;
   onCheckedChange?: (checked: boolean) => void;
+  onDelete?: () => void;
   onSettled?: () => void;
   onReverted?: () => void;
 };
@@ -204,6 +204,7 @@ export function TaskItem({
   size = "md",
   accent = "#FF5F2E",
   onCheckedChange,
+  onDelete,
   onSettled,
   onReverted,
   className,
@@ -243,24 +244,34 @@ export function TaskItem({
     onSettled?.();
   };
 
+  const toggle = () => {
+    if (checked === undefined) setOwn(!done);
+    onCheckedChange?.(!done);
+  };
+
   return (
-    <motion.button
-      type="button"
+    <motion.div
       role="checkbox"
       aria-checked={done}
+      tabIndex={0}
       data-slot="task-item"
       data-state={done ? "checked" : "unchecked"}
       style={{ [ACCENT_VAR]: accent, ...style } as CSSProperties}
       onClick={(event) => {
-        onClick?.(event);
-        if (checked === undefined) setOwn(!done);
-        onCheckedChange?.(!done);
+        onClick?.(event as any);
+        toggle();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          toggle();
+        }
       }}
       animate={{ x: stage === STAGE.nudge ? FLICK : 0 }}
       transition={stage === STAGE.nudge ? timing(NUDGE) : INSTANT}
       onAnimationComplete={onFlicked}
       className={cn(
-        "flex w-fit max-w-full cursor-pointer items-start text-left transition-[filter,box-shadow] duration-300",
+        "group/task flex w-fit max-w-full cursor-pointer items-start text-left transition-[filter,box-shadow] duration-300 select-none",
         SIZES[size].row,
         CARD,
         FOCUS,
@@ -279,7 +290,23 @@ export function TaskItem({
         size={size}
         onStruck={onStruck}
       />
-    </motion.button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label="Delete task"
+          title="Delete task"
+          className="opacity-0 group-hover/task:opacity-100 hover:text-red-400 text-white/30 p-0.5 rounded-md hover:bg-red-500/15 transition-all shrink-0 self-start mt-[1px] ml-1"
+        >
+          <svg viewBox="0 0 12 12" className="w-3 h-3 fill-none stroke-current stroke-[1.75]">
+            <path d="M3 3l6 6M9 3l-6 6" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+    </motion.div>
   );
 }
 
@@ -295,6 +322,7 @@ export type TaskListProps = ComponentProps<"ul"> & {
   size?: TaskSize;
   accent?: string;
   onTasksChange?: (tasks: Task[]) => void;
+  onTaskDelete?: (id: string) => void;
 };
 
 export function TaskList({
@@ -303,6 +331,7 @@ export function TaskList({
   size = "md",
   accent,
   onTasksChange,
+  onTaskDelete,
   className,
   ...props
 }: TaskListProps) {
@@ -353,6 +382,7 @@ export function TaskList({
             size={size}
             accent={accent}
             onCheckedChange={(done) => toggle(task, done)}
+            onDelete={onTaskDelete ? () => onTaskDelete(task.id) : undefined}
             onSettled={() =>
               setParked((ids) =>
                 ids.includes(task.id) ? ids : [...ids, task.id],

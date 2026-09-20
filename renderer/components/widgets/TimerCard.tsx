@@ -1,125 +1,184 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { motion } from 'motion/react'
+import type { Timer } from '../../hooks/useTimer'
+import { AnimatedCounter } from '../ui/animated-counter'
+import { cn } from '../../lib/utils'
 
 const spring = { type: 'spring' as const, stiffness: 400, damping: 30 }
+const ACCENT = '#FF5F2E'
 
-const format = (totalSeconds: number) => {
-  const m = Math.floor(totalSeconds / 60)
-  const s = totalSeconds % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+/** Each group is its own counter so only the digits that change actually roll —
+ *  a single counter over the whole value would spin the minutes every second. */
+const split = (totalMs: number) => {
+  const safe = Math.max(0, Math.floor(Number.isFinite(totalMs) ? totalMs : 0))
+  return {
+    hours: Math.floor(safe / 3600000),
+    minutes: Math.floor((safe % 3600000) / 60000),
+    seconds: Math.floor((safe % 60000) / 1000),
+    hundredths: Math.floor((safe % 1000) / 10),
+  }
 }
+
+const PRESETS = [1, 5, 10, 25]
 
 interface TimerCardProps {
-  /** Lets the notch stay open while a countdown is running. */
-  onRunningChange?: (isRunning: boolean) => void
+  /** State is owned above this card so it survives the notch collapsing. */
+  timer: Timer
 }
 
-export const TimerCard: React.FC<TimerCardProps> = ({ onRunningChange }) => {
-  const [remaining, setRemaining] = useState(0)
-  const [isRunning, setIsRunning] = useState(false)
-  // Tracks whether a timer ran down, so "Time's up" only shows after a real
-  // countdown rather than on a fresh 00:00.
-  const [finished, setFinished] = useState(false)
+export const TimerCard: React.FC<TimerCardProps> = ({ timer }) => {
+  const { remainingMs, isRunning, finished, start, add, stop, reset } = timer
+  const [custom, setCustom] = useState('')
+  const { hours, minutes, seconds, hundredths } = split(remainingMs)
 
-  // setInterval drifts, so the deadline is stored as a timestamp and the
-  // remaining time is derived from the clock on every tick.
-  const deadlineRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (!isRunning) return
-
-    const tick = () => {
-      if (deadlineRef.current === null) return
-      const left = Math.max(0, Math.round((deadlineRef.current - Date.now()) / 1000))
-      setRemaining(left)
-
-      if (left === 0) {
-        setIsRunning(false)
-        setFinished(true)
-        deadlineRef.current = null
-      }
+  const handleAction = () => {
+    if (isRunning) {
+      stop()
+      return
     }
 
-    tick()
-    const id = setInterval(tick, 250)
-    return () => clearInterval(id)
-  }, [isRunning])
+    const minutes = parseFloat(custom.trim())
+    if (Number.isFinite(minutes) && minutes > 0) {
+      if (minutes > 1440) return // Max 24 hours (1440 mins)
+      start(Math.round(minutes * 60))
+      setCustom('')
+      return
+    }
 
-  // Held in a ref so a caller passing an inline function cannot turn this into
-  // a render loop.
-  const onRunningChangeRef = useRef(onRunningChange)
-  onRunningChangeRef.current = onRunningChange
-
-  useEffect(() => {
-    onRunningChangeRef.current?.(isRunning)
-  }, [isRunning])
-
-  const addMinutes = (minutes: number) => {
-    const base = deadlineRef.current ?? Date.now()
-    deadlineRef.current = base + minutes * 60_000
-    setRemaining(Math.round((deadlineRef.current - Date.now()) / 1000))
-    setFinished(false)
-    setIsRunning(true)
-  }
-
-  const reset = () => {
-    deadlineRef.current = null
-    setIsRunning(false)
-    setFinished(false)
-    setRemaining(0)
+    // If there is paused remaining time, resume it
+    if (remainingMs > 0 && !finished) {
+      start(remainingMs / 1000)
+    }
   }
 
   return (
-    <div className="flex flex-col h-full rounded-2xl bg-neutral-100 dark:bg-[#161616] p-3 overflow-hidden">
-      <div className="flex-1 grid place-items-center min-h-0">
-        <div className="text-center">
-          <motion.div
-            key={finished ? 'done' : 'running'}
-            animate={finished ? { scale: [1, 1.06, 1] } : { scale: 1 }}
-            transition={finished ? { duration: 0.4 } : spring}
-            className="text-3xl font-light tabular-nums tracking-tight text-neutral-800 dark:text-neutral-100"
-          >
-            {format(remaining)}
-          </motion.div>
-
-          <div className="h-4 mt-0.5 text-[10px] text-neutral-500 dark:text-neutral-400">
-            {finished ? "Time's up" : isRunning ? 'Counting down' : 'Set a timer'}
-          </div>
+    <div className="flex flex-col justify-between h-full rounded-card bg-[#121215]/90 border border-white/[0.08] px-3.5 pt-3.5 pb-5 overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl">
+      {/* Header matching tasks header */}
+      <div className="flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-1.5">
+          <div className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-[#FF5F2E] animate-pulse' : 'bg-white/40'}`} />
+          <span className="text-[12px] font-semibold text-white/90 tracking-tight">Timer</span>
         </div>
+        {isRunning ? (
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#FF5F2E]/15 text-[#FF5F2E] border border-[#FF5F2E]/25">
+            Active
+          </span>
+        ) : finished ? (
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/25">
+            Time's up
+          </span>
+        ) : (
+          <span className="tabular-nums text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.06] text-white/60">
+            Ready
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center justify-center gap-2 shrink-0">
-        <motion.button
-          type="button"
-          onClick={() => addMinutes(5)}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          transition={spring}
-          className="flex items-center gap-1.5 rounded-full bg-[#FF5F2E] text-white
-                     px-3 py-1.5 text-[11px] font-medium
-                     shadow-[0_1px_2px_rgba(0,0,0,0.06),0_3px_10px_rgba(0,0,0,0.08)]"
+      {/* Hero Time Display: Clean, professional timer with baseline-aligned (neeche) microseconds */}
+      <div className="flex-1 flex items-center justify-center min-h-0 py-1">
+        <motion.div
+          animate={finished ? { scale: [1, 1.03, 1] } : { scale: 1 }}
+          transition={finished ? { duration: 0.4 } : spring}
+          className="flex items-center justify-center select-none leading-none pointer-events-none text-white font-bold tracking-tight"
         >
-          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 fill-current">
-            <path d="M3 2l7 4-7 4z" />
-          </svg>
-          +5 min
-        </motion.button>
+          {/* Main digits: minutes & seconds */}
+          <div className={cn(
+            "flex items-center tabular-nums",
+            hours > 0 ? "text-[44px]" : "text-[62px]"
+          )}>
+            {hours > 0 && (
+              <>
+                <AnimatedCounter value={hours} duration={0.4} separator="" />
+                <span className="opacity-30 mx-1 font-light text-white select-none">:</span>
+              </>
+            )}
+            <AnimatedCounter value={minutes} padStart={2} duration={0.4} separator="" />
+            <span className="opacity-30 mx-1 font-light text-white select-none">:</span>
+            <AnimatedCounter value={seconds} padStart={2} duration={0.4} separator="" />
+          </div>
 
-        <motion.button
-          type="button"
-          onClick={reset}
-          aria-label="Reset timer"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          transition={spring}
-          className="grid place-items-center w-8 h-8 rounded-full
-                     bg-white dark:bg-[#1F1F1F] hover:brightness-95 dark:hover:brightness-110
-                     transition-[filter] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-        >
-          <svg viewBox="0 0 12 12" className="w-3 h-3 fill-none stroke-neutral-800 stroke-[1.8]">
-            <path d="M2.5 6.5l2.5 2.5 4.5-5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </motion.button>
+          {/* Microseconds aligned to the bottom baseline (neeche) like a professional timer */}
+          <div className={cn(
+            "flex items-baseline tabular-nums ml-1 select-none",
+            hours > 0 ? "translate-y-[9px]" : "translate-y-[14px]"
+          )}>
+            <span className="text-[16px] font-normal text-white/40 mr-0.5">.</span>
+            <span className={cn(
+              "font-semibold text-white/70 tracking-tight",
+              hours > 0 ? "text-[16px]" : "text-[20px]"
+            )}>
+              {String(hundredths).padStart(2, '0')}
+            </span>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Presets & Custom Input matching tasks controls styling */}
+      <div className="shrink-0 space-y-2 pt-1">
+        <div className="flex items-center justify-center gap-1.5">
+          {PRESETS.map((m) => (
+            <motion.button
+              key={m}
+              type="button"
+              onClick={() => (isRunning ? add(m * 60) : start(m * 60))}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              transition={spring}
+              className="flex-1 py-1.5 rounded-control bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.06]
+                         border border-white/[0.08] hover:border-white/[0.14]
+                         text-[11px] font-medium text-white/80 hover:text-white
+                         transition-all cursor-pointer"
+            >
+              {isRunning ? `+${m}` : `${m}`}m
+            </motion.button>
+          ))}
+
+          <motion.button
+            type="button"
+            onClick={reset}
+            aria-label="Reset timer"
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            transition={spring}
+            className="w-7 h-7 rounded-control grid place-items-center
+                       bg-white/[0.04] hover:bg-red-500/15 active:bg-red-500/25
+                       border border-white/[0.08] hover:border-red-500/30
+                       text-white/40 hover:text-red-400
+                       transition-all shrink-0 cursor-pointer"
+          >
+            <svg viewBox="0 0 12 12" className="w-3 h-3 fill-none stroke-current stroke-[1.75]">
+              <path d="M3 3l6 6M9 3l-6 6" strokeLinecap="round" />
+            </svg>
+          </motion.button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <input
+            value={custom}
+            maxLength={4}
+            onChange={(e) => setCustom(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAction()}
+            inputMode="decimal"
+            placeholder="Custom minutes"
+            className="flex-1 min-w-0 rounded-control bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08]
+                       border border-white/[0.08] focus:border-[#FF5F2E]/60
+                       px-3 py-1.5 text-[11px] text-white
+                       placeholder:text-white/30 outline-none
+                       transition-all duration-200"
+          />
+          <motion.button
+            type="button"
+            onClick={handleAction}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
+            transition={spring}
+            className="shrink-0 rounded-control px-4 py-1.5 text-[11px] font-semibold text-white
+                       bg-[#FF5F2E] hover:brightness-110 active:scale-95
+                       shadow-[0_1px_6px_rgba(255,95,46,0.3)] transition-all cursor-pointer"
+          >
+            {isRunning ? 'Stop' : 'Start'}
+          </motion.button>
+        </div>
       </div>
     </div>
   )

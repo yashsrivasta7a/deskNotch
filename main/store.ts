@@ -1,9 +1,4 @@
-/**
- * Small JSON store for widget state that should survive a restart.
- *
- * Lives in the main process because the renderer has no filesystem access, and
- * in userData so it is per-user and outside the install directory.
- */
+
 import { app, ipcMain } from 'electron'
 import fs from 'fs'
 import path from 'path'

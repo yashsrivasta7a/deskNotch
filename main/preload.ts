@@ -19,6 +19,6 @@ const handler = {
   },
 }
 
-contextBridge.exposeInMainWorld('ipc', handler)
+contextBridge.exposeInMainWorld('bridge', handler)
 
 export type IpcHandler = typeof handler

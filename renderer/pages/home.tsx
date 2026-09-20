@@ -3,11 +3,7 @@ import Head from 'next/head'
 import { NotchChassis } from '../components/notch/NotchChassis'
 import { TodoCard } from '../components/widgets/TodoCard'
 import { TimerCard } from '../components/widgets/TimerCard'
-
-// --- Now playing, parked ---------------------------------------------------
-// The SMTC pipeline still runs in main; only the UI is disconnected. Restore by
-// uncommenting these and the block marked below.
-//
+import { useTimer } from '../hooks/useTimer'
 // import { AnimatePresence, motion } from 'motion/react'
 // import { MediaControls } from '../components/notch/MediaControls'
 // import { useNowPlaying } from '../hooks/useNowPlaying'
@@ -15,7 +11,7 @@ import { TimerCard } from '../components/widgets/TimerCard'
 
 export default function HomePage() {
   // const nowPlaying = useNowPlaying()
-
+  const timer = useTimer()
   return (
     <React.Fragment>
       <Head>
@@ -25,16 +21,15 @@ export default function HomePage() {
       <div className="w-full h-full flex justify-center items-start pointer-events-none">
         <div className="pointer-events-auto">
           <NotchChassis
-            expandedWidth={620}
-            expandedHeight={250}
+            expandedWidth={640}
+            expandedHeight={260}
             expandedContent={
-              <div className="grid grid-cols-2 gap-2 h-full">
+              <div className="grid grid-cols-2 gap-3 h-full pt-1 pb-1">
                 <TodoCard />
-                <TimerCard />
+                <TimerCard timer={timer} />
               </div>
             }
           >
-
           </NotchChassis>
         </div>
       </div>
@@ -42,7 +37,7 @@ export default function HomePage() {
   )
 }
 
-/* --- Now playing UI, parked -------------------------------------------------
+/* 
 
 Collapsed bar had album art and the playing bars:
 

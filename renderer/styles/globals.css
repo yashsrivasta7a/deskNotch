@@ -1,10 +1,37 @@
 @import 'tailwindcss';
 
+/* ---------------------------------------------------------------------------
+   Corner radius, in one place.
+
+   Change a value here and every surface that uses it follows — the widget
+   cards, their controls, and the notch shell itself.
+
+   The notch is the exception that cannot live purely in CSS: its radius is
+   animated by Motion in NotchChassis.tsx, which needs numbers rather than
+   custom properties. Those two values are read from here at runtime, so this
+   file stays the single source.
+   --------------------------------------------------------------------------- */
+@theme {
+  /* Widget cards — the panels inside the notch. */
+  --radius-card: 12px;
+
+  /* Controls inside a card: buttons, inputs, task rows. */
+  --radius-control: 10px;
+
+  /* Small affordances: icon buttons, chips. */
+  --radius-chip: 8px;
+
+  /* The notch shell. Only its bottom corners round; the top edge sits flush
+     against the screen edge. */
+  --radius-notch-closed: 11px;
+  --radius-notch-open: 26px;
+}
+
 @layer base {
 
-html,
-body,
-#__next {
+  html,
+  body,
+  #__next {
     @apply bg-transparent text-white m-0 p-0 overflow-hidden select-none w-full h-full;
   }
 }
@@ -15,4 +42,33 @@ nextjs-portal,
 [data-nextjs-dialog-overlay],
 #__next-build-watcher {
   display: none !important;
+}
+
+/* Sleek minimalist scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* The task-list component ships its own radius; pull it onto the shared token
+   so the checklist rows match every other control in the notch. */
+[data-slot='task-item'] {
+  border-radius: var(--radius-control);
 }

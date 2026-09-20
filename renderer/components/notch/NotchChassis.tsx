@@ -4,6 +4,18 @@ import { AnimatePresence, motion } from 'motion/react'
 /** Dynamic Island spring — snappy, barely overshoots. */
 const spring = { type: 'spring' as const, stiffness: 400, damping: 30 }
 
+/**
+ * Motion animates numbers, not custom properties, so the notch radius cannot
+ * be a class the way the cards' is. Reading the token at runtime keeps
+ * globals.css the single place these values are defined.
+ */
+const radiusToken = (name: string, fallback: number) => {
+  if (typeof window === 'undefined') return fallback
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name)
+  const parsed = Number.parseFloat(raw)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
 interface NotchChassisProps {
   children?: React.ReactNode
   /** Rendered only while expanded, below the collapsed bar. */
@@ -32,35 +44,37 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
   className = '',
 }) => {
   const [isHovered, setIsHovered] = useState(false)
-  // Clicking pins the notch open. Without it, anything that takes more than a
-  // moment — typing a task, watching a timer — disappears the instant the
-  // pointer drifts off.
+
   const [isPinned, setIsPinned] = useState(false)
 
   const isOpen = isHovered || isPinned || keepOpen
 
-  // The window is click-through by default so the rest of the strip does not
-  // swallow clicks meant for whatever is underneath. The main process only
-  // needs to take clicks back while the notch is actually open.
+  // Resolved after mount so server-rendered markup and the client agree.
+  const [radius, setRadius] = useState({ closed: 11, open: 26 })
+  useEffect(() => {
+    setRadius({
+      closed: radiusToken('--radius-notch-closed', 11),
+      open: radiusToken('--radius-notch-open', 26),
+    })
+  }, [])
+
+
   const setHover = (over: boolean) => {
     setIsHovered(over)
     if (over || isPinned || keepOpen) {
-      window.ipc?.send('notch:hover', true)
+      window.bridge?.send('notch:hover', true)
     } else {
-      window.ipc?.send('notch:hover', false)
+      window.bridge?.send('notch:hover', false)
     }
   }
 
-  // A pin or a keepOpen that outlives the hover still needs clicks routed here.
   useEffect(() => {
-    if (isPinned || keepOpen) window.ipc?.send('notch:hover', true)
-    else if (!isHovered) window.ipc?.send('notch:hover', false)
+    if (isPinned || keepOpen) window.bridge?.send('notch:hover', true)
+    else if (!isHovered) window.bridge?.send('notch:hover', false)
   }, [isPinned, keepOpen, isHovered])
 
-  // Keyboard focus follows the pin, not the hover — text fields inside the
-  // notch need it, but grabbing focus on a passing hover would be hostile.
   useEffect(() => {
-    window.ipc?.send('notch:pinned', isPinned)
+    window.bridge?.send('notch:pinned', isPinned)
   }, [isPinned])
 
   return (
@@ -76,29 +90,25 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
       style={{ willChange: 'width, height' }}
       className={`relative select-none cursor-default ${className}`}
     >
-      {/* Inverted concave corners, filling the gap where the flat screen edge
-          meets the notch shoulder. Pinned to the top so they hold while the
-          notch grows. */}
+
       <svg
-        className="absolute top-0 -left-[6px] w-[6px] h-[6px] fill-black pointer-events-none z-20"
+        className="absolute top-0 -left-[1px] w-[6px] h-[6px] fill-black pointer-events-none z-20"
         viewBox="0 0 6 6"
       >
         <path d="M0,0 H6 V6 A6,6 0 0 1 0,0 Z" />
       </svg>
       <svg
-        className="absolute top-0 -right-[6px] w-[6px] h-[6px] fill-black pointer-events-none z-20"
+        className="absolute top-0 -right-[1px] w-[6px] h-[6px] fill-black pointer-events-none z-20"
         viewBox="0 0 6 6"
       >
         <path d="M6,0 H0 V6 A6,6 0 0 0 6,0 Z" />
       </svg>
 
-      {/* Only the bottom corners round — the top edge sits flush against the
-          screen edge, like the hardware notch it imitates. */}
       <motion.main
         initial={false}
         animate={{
-          borderBottomLeftRadius: isOpen ? 26 : 11,
-          borderBottomRightRadius: isOpen ? 26 : 11,
+          borderBottomLeftRadius: isOpen ? radius.open : radius.closed,
+          borderBottomRightRadius: isOpen ? radius.open : radius.closed,
         }}
         transition={spring}
         className="w-full h-full bg-black text-white overflow-hidden flex flex-col
@@ -110,22 +120,29 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
           willChange: 'border-radius',
         }}
       >
-        {/* The collapsed bar keeps its height while the shell grows around it.
-            Clicking it pins the notch; clicks inside the expanded content are
-            left alone so widget buttons do not toggle the pin. */}
         <div
           onClick={() => setIsPinned((pinned) => !pinned)}
-          className="h-[30px] shrink-0 flex items-center justify-between px-3 cursor-pointer"
+          className="h-[30px] shrink-0 flex items-center justify-between px-3.5 cursor-pointer relative"
         >
-          {children}
+          <div className="flex items-center gap-2">
+            {children}
+          </div>
+          {isOpen && (
+            <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none">
+              <div className="w-7 h-1 rounded-full bg-white/20" />
+            </div>
+          )}
           {isPinned && (
-            <motion.span
+            <motion.div
               initial={{ opacity: 0, scale: 0.6 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={spring}
-              className="w-1.5 h-1.5 rounded-full bg-white/50 shrink-0"
-              title="Pinned open"
-            />
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-white/70 ml-auto"
+              title="Pinned open - click to unpin"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F2E]" />
+              <span className="text-[9px] font-semibold tracking-wider">PINNED</span>
+            </motion.div>
           )}
         </div>
 
