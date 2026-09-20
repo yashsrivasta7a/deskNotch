@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 
 /** Dynamic Island spring — snappy, barely overshoots. */
@@ -23,6 +23,13 @@ interface NotchChassisProps {
   /** Must stay under STRIP_HEIGHT in main.ts, or the window clips it. */
   expandedWidth?: number
   expandedHeight?: number
+  /** Rendered behind everything, inside the shell's rounded clip. Receives the
+   *  open state so it can stay out of the way while collapsed. */
+  ambient?: (isOpen: boolean) => React.ReactNode
+  /** Shown at the left of the collapsed bar, but only while open. */
+  leading?: React.ReactNode
+  /** Shown at the right of the collapsed bar, but only while open. */
+  trailing?: React.ReactNode
   /** Holds the notch open regardless of hover — for a running timer, say. */
   keepOpen?: boolean
   className?: string
@@ -40,6 +47,9 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
   expandedContent,
   expandedWidth = 340,
   expandedHeight = 132,
+  ambient,
+  leading,
+  trailing,
   keepOpen = false,
   className = '',
 }) => {
@@ -59,19 +69,37 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
   }, [])
 
 
-  const setHover = (over: boolean) => {
-    setIsHovered(over)
-    if (over || isPinned || keepOpen) {
-      window.bridge?.send('notch:hover', true)
-    } else {
-      window.bridge?.send('notch:hover', false)
-    }
-  }
+  const setHover = (over: boolean) => setIsHovered(over)
+
+  // The window is a full-width strip, so the main process cannot simply stop
+  // ignoring mouse events — that would hand the whole strip clicks meant for
+  // whatever is underneath. It gets the notch's rectangle instead and tests
+  // the cursor against it.
+  const shellRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (isPinned || keepOpen) window.bridge?.send('notch:hover', true)
-    else if (!isHovered) window.bridge?.send('notch:hover', false)
-  }, [isPinned, keepOpen, isHovered])
+    const report = () => {
+      const element = shellRef.current
+      if (!element) return
+
+      const rect = element.getBoundingClientRect()
+      window.bridge?.send('notch:bounds', {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      })
+    }
+
+    report()
+
+    // The shell springs between sizes, so its bounds are only final once the
+    // animation settles; an observer catches every frame of that.
+    const observer = new ResizeObserver(report)
+    if (shellRef.current) observer.observe(shellRef.current)
+
+    return () => observer.disconnect()
+  }, [isOpen, expandedWidth, expandedHeight])
 
   useEffect(() => {
     window.bridge?.send('notch:pinned', isPinned)
@@ -79,6 +107,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
 
   return (
     <motion.div
+      ref={shellRef}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       initial={false}
@@ -111,20 +140,40 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
           borderBottomRightRadius: isOpen ? radius.open : radius.closed,
         }}
         transition={spring}
-        className="w-full h-full bg-black text-white overflow-hidden flex flex-col
-                   border-b border-x border-white/[0.08]
-                   shadow-[inset_0_-1px_1px_rgba(255,255,255,0.06)]"
+        className="relative w-full h-full bg-black text-white overflow-hidden flex flex-col
+                   border-b border-x border-white/[0.07]
+                   shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9),inset_0_-1px_1px_rgba(255,255,255,0.05)]"
         style={{
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
           willChange: 'border-radius',
         }}
       >
+        {ambient?.(isOpen)}
+
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px
+                     bg-gradient-to-r from-transparent via-white/[0.14] to-transparent"
+        />
+
         <div
           onClick={() => setIsPinned((pinned) => !pinned)}
           className="h-[30px] shrink-0 flex items-center justify-between px-3.5 cursor-pointer relative"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <AnimatePresence>
+              {isOpen && leading && (
+                <motion.div
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  transition={spring}
+                >
+                  {leading}
+                </motion.div>
+              )}
+            </AnimatePresence>
             {children}
           </div>
           {isOpen && (
@@ -132,18 +181,32 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
               <div className="w-7 h-1 rounded-full bg-white/20" />
             </div>
           )}
-          {isPinned && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.6 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={spring}
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.08] border border-white/[0.08] text-white/70 ml-auto"
-              title="Pinned open - click to unpin"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5F2E]" />
-              <span className="text-[9px] font-semibold tracking-wider">PINNED</span>
-            </motion.div>
-          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <AnimatePresence>
+              {isOpen && trailing && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={spring}
+                >
+                  {trailing}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* A dot rather than a label: the pin is a state, not an
+                announcement, and the bar has no room for words. */}
+            {isPinned && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={spring}
+                className="w-1.5 h-1.5 rounded-full bg-[#FF5F2E] shrink-0"
+                title="Pinned open — click to unpin"
+              />
+            )}
+          </div>
         </div>
 
         <AnimatePresence>
@@ -153,7 +216,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
               animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, scale: 0.95, filter: 'blur(6px)' }}
               transition={{ ...spring, opacity: { duration: 0.15 } }}
-              className="flex-1 px-3 pb-3 overflow-hidden"
+              className="flex-1 min-h-0 px-5 pt-1 pb-4"
               style={{ willChange: 'opacity, transform, filter' }}
             >
               {expandedContent}

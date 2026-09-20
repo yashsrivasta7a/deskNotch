@@ -76,6 +76,24 @@ const FILLED: Stage[] = ["tick", "strike", "nudge", "settled", "unstrike"];
 const STRUCK: Stage[] = ["strike", "nudge", "settled"];
 
 const ACCENT_VAR = "--task-accent";
+const TICK_VAR = "--task-tick";
+
+// Relative luminance, so a light accent gets a dark tick and vice versa.
+function tickColor(accent: string) {
+  const hex = accent.replace("#", "");
+  if (hex.length !== 3 && hex.length !== 6) return "white";
+
+  const full =
+    hex.length === 3
+      ? hex.split("").map((char) => char + char).join("")
+      : hex;
+
+  const [r, g, b] = [0, 2, 4].map((offset) =>
+    parseInt(full.slice(offset, offset + 2), 16),
+  );
+
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.6 ? "#111" : "white";
+}
 const CARD =
   "bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] shadow-sm backdrop-blur-sm transition-all";
 const FOCUS = `outline-none focus-visible:ring-1.5 focus-visible:ring-[var(${ACCENT_VAR})]/80 focus-visible:ring-offset-1 focus-visible:ring-offset-black`;
@@ -134,7 +152,7 @@ function TaskCheck({
       <motion.path
         d="M7.4 12.4 10.6 15.5 16.6 8.9"
         fill="none"
-        stroke="white"
+        stroke={`var(${TICK_VAR})`}
         strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -256,7 +274,13 @@ export function TaskItem({
       tabIndex={0}
       data-slot="task-item"
       data-state={done ? "checked" : "unchecked"}
-      style={{ [ACCENT_VAR]: accent, ...style } as CSSProperties}
+      style={
+        {
+          [ACCENT_VAR]: accent,
+          [TICK_VAR]: tickColor(accent),
+          ...style,
+        } as CSSProperties
+      }
       onClick={(event) => {
         onClick?.(event as any);
         toggle();

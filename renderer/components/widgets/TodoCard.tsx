@@ -1,51 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { motion } from 'motion/react'
-import { TaskList, type Task } from '../ui/task-list'
+import { TaskList } from '../ui/task-list'
+import type { TaskStore } from '../../hooks/useTasks'
 
-const ACCENT = '#FF5F2E'
+/** The notch's own accent, so both views read as one product. */
+const ACCENT = '#FFFFFF'
 
-export const TodoCard: React.FC = () => {
+interface TodoCardProps {
+  store: TaskStore
+}
 
-  const [tasks, setTasks] = useState<Task[]>([])
+export const TodoCard: React.FC<TodoCardProps> = ({ store }) => {
+  const { tasks, setTasks, add: addTask, remove: removeTask } = store
   const [draft, setDraft] = useState('')
-  const loaded = useRef(false)
-
-  useEffect(() => {
-    window.bridge
-      ?.invoke<Task[]>('store:get', 'todos')
-      .then((stored) => setTasks(stored ?? []))
-      .catch(() => setTasks([]))
-      .finally(() => {
-        loaded.current = true
-      })
-  }, [])
-
-  useEffect(() => {
-    if (!loaded.current) return
-    void window.bridge?.invoke('store:set', 'todos', tasks)
-  }, [tasks])
-
-  const removeTask = (id: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== id))
-  }
 
   const clearCompleted = () => {
     setTasks((prev) => prev.filter((t) => !t.done))
   }
 
   const add = () => {
-    const label = draft.trim()
-    if (!label) return
-    if (label.length > 200) return
-    setTasks((prev) => [...prev, { id: crypto.randomUUID(), label, done: false }])
+    if (draft.trim().length > 200) return
+    addTask(draft)
     setDraft('')
   }
   const doneCount = tasks.filter((t) => t.done).length
   return (
-    <div className="flex flex-col h-full rounded-card bg-[#121215]/90 border border-white/[0.08] px-3.5 pt-3.5 pb-5 overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl">
+    <div className="flex flex-col h-full glass rounded-card px-3.5 pt-3.5 pb-5 overflow-hidden">
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#FF5F2E]" />
+          <div className="w-1.5 h-1.5 rounded-full bg-white/90" />
           <span className="text-[12px] font-semibold text-white/90 tracking-tight">Today's tasks</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -85,8 +68,8 @@ export const TodoCard: React.FC = () => {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           placeholder="What needs doing?"
-          className="w-full rounded-control bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08]
-                     border border-white/[0.08] focus:border-[#FF5F2E]/60
+          className="w-full rounded-control glass-control
+                     border border-white/[0.08] focus:border-white/30
                      pl-3 pr-14 py-1.5 text-[11px] text-white
                      placeholder:text-white/30 outline-none
                      transition-all duration-200"
@@ -109,7 +92,7 @@ export const TodoCard: React.FC = () => {
               onClick={add}
               aria-label="Add task"
               title="Add task (Enter)"
-              className="p-1 rounded-chip bg-[#FF5F2E] text-white hover:brightness-110 active:scale-95 transition-all shadow-[0_1px_6px_rgba(255,95,46,0.3)]"
+              className="p-1 rounded-chip bg-white text-black hover:bg-white/85 active:scale-95 transition-all shadow-[0_1px_6px_rgba(255,255,255,0.18)]"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

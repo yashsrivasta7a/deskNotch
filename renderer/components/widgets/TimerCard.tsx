@@ -5,7 +5,6 @@ import { AnimatedCounter } from '../ui/animated-counter'
 import { cn } from '../../lib/utils'
 
 const spring = { type: 'spring' as const, stiffness: 400, damping: 30 }
-const ACCENT = '#FF5F2E'
 
 /** Each group is its own counter so only the digits that change actually roll —
  *  a single counter over the whole value would spin the minutes every second. */
@@ -52,15 +51,15 @@ export const TimerCard: React.FC<TimerCardProps> = ({ timer }) => {
   }
 
   return (
-    <div className="flex flex-col justify-between h-full rounded-card bg-[#121215]/90 border border-white/[0.08] px-3.5 pt-3.5 pb-5 overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl">
+    <div className="flex flex-col justify-between h-full glass rounded-card px-3.5 pt-3.5 pb-5 overflow-hidden">
       {/* Header matching tasks header */}
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-1.5">
-          <div className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-[#FF5F2E] animate-pulse' : 'bg-white/40'}`} />
+          <div className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-white animate-pulse' : 'bg-white/40'}`} />
           <span className="text-[12px] font-semibold text-white/90 tracking-tight">Timer</span>
         </div>
         {isRunning ? (
-          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#FF5F2E]/15 text-[#FF5F2E] border border-[#FF5F2E]/25">
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-white border border-white/20">
             Active
           </span>
         ) : finished ? (
@@ -124,7 +123,7 @@ export const TimerCard: React.FC<TimerCardProps> = ({ timer }) => {
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               transition={spring}
-              className="flex-1 py-1.5 rounded-control bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.06]
+              className="flex-1 py-1.5 rounded-control glass-control
                          border border-white/[0.08] hover:border-white/[0.14]
                          text-[11px] font-medium text-white/80 hover:text-white
                          transition-all cursor-pointer"
@@ -160,7 +159,7 @@ export const TimerCard: React.FC<TimerCardProps> = ({ timer }) => {
             onKeyDown={(e) => e.key === 'Enter' && handleAction()}
             inputMode="decimal"
             placeholder="Custom minutes"
-            className="flex-1 min-w-0 rounded-control bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08]
+            className="flex-1 min-w-0 rounded-control glass-control
                        border border-white/[0.08] focus:border-[#FF5F2E]/60
                        px-3 py-1.5 text-[11px] text-white
                        placeholder:text-white/30 outline-none
@@ -172,9 +171,9 @@ export const TimerCard: React.FC<TimerCardProps> = ({ timer }) => {
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.96 }}
             transition={spring}
-            className="shrink-0 rounded-control px-4 py-1.5 text-[11px] font-semibold text-white
-                       bg-[#FF5F2E] hover:brightness-110 active:scale-95
-                       shadow-[0_1px_6px_rgba(255,95,46,0.3)] transition-all cursor-pointer"
+            className="shrink-0 rounded-control px-4 py-1.5 text-[11px] font-semibold text-black
+                       bg-white hover:bg-white/90 active:scale-95
+                       shadow-[0_1px_8px_rgba(255,255,255,0.15)] transition-all cursor-pointer"
           >
             {isRunning ? 'Stop' : 'Start'}
           </motion.button>

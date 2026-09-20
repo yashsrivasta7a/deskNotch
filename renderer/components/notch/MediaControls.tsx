@@ -18,7 +18,7 @@ const ControlButton: React.FC<ControlButtonProps> = ({ label, onClick, children 
     whileHover={{ scale: 1.12 }}
     whileTap={{ scale: 0.92 }}
     transition={spring}
-    className="grid place-items-center w-8 h-8 rounded-full text-white/70
+    className="grid place-items-center w-7 h-7 rounded-full text-white/55
                hover:text-white hover:bg-white/10 transition-colors
                focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/40"
   >
@@ -39,7 +39,7 @@ export const MediaControls: React.FC<MediaControlsProps> = ({
   onPlayPause,
   onNext,
 }) => (
-  <div className="flex items-center justify-center gap-1">
+  <div className="flex items-center gap-0.5">
     <ControlButton label="Previous track" onClick={onPrevious}>
       <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current">
         <path d="M4 3h1.6v10H4zm8 0v10L5.6 8z" />

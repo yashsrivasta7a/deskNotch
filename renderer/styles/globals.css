@@ -24,7 +24,7 @@
   /* The notch shell. Only its bottom corners round; the top edge sits flush
      against the screen edge. */
   --radius-notch-closed: 11px;
-  --radius-notch-open: 26px;
+  --radius-notch-open: 21px;
 }
 
 @layer base {
@@ -71,4 +71,105 @@ nextjs-portal,
    so the checklist rows match every other control in the notch. */
 [data-slot='task-item'] {
   border-radius: var(--radius-control);
+  background: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045) !important;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+[data-slot='task-item']:hover {
+  background: rgba(255, 255, 255, 0.055) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Marquee for overflowing track titles. Holds at each end so the text can
+   actually be read before it moves on. */
+@keyframes notch-marquee {
+
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+
+  50%,
+  70% {
+    transform: translateX(var(--marquee-distance));
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+/* ---------------------------------------------------------------------------
+   Glass surfaces.
+
+   There is nothing behind these but the notch's own black, so backdrop-blur
+   has nothing to work on. The glass reads instead from layered translucency:
+   a gradient face that is lighter at the top, a hairline that catches light
+   along the top edge, and a soft drop shadow to lift it off the shell.
+   --------------------------------------------------------------------------- */
+.glass {
+  position: relative;
+  background:
+    linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgba(255, 255, 255, 0.018) 42%,
+      rgba(255, 255, 255, 0.006) 100%
+    ),
+    rgba(6, 6, 8, 0.82);
+  backdrop-filter: blur(26px) saturate(1.6);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6);
+  box-shadow:
+    0 12px 40px -14px rgba(0, 0, 0, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* The lit top edge, brightest at the centre where a real bevel would catch
+   the most light. */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset-inline: 10%;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+}
+
+/* A cool sheen falling across the upper-left, which is what actually sells
+   the material — without it the surface is just a dark panel. */
+.glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    130% 90% at 12% -20%,
+    rgba(190, 215, 255, 0.07),
+    transparent 58%
+  );
+}
+
+/* Content needs to sit above both pseudo-elements. */
+.glass > * {
+  position: relative;
+  z-index: 1;
+}
+
+.glass-control {
+  background: rgba(255, 255, 255, 0.032);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-control:hover {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.085);
 }
