@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import serve from 'electron-serve'
 import { startSmtc, stopSmtc } from './smtc'
 import { registerIpc } from './ipc'
+import { stopMediaIpc } from './ipc/media'
 
 const isProd = process.env.NODE_ENV === 'production'
 
@@ -103,5 +104,6 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopSmtc()
+  stopMediaIpc()
   app.quit()
 })

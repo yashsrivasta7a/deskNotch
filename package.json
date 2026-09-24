@@ -18,10 +18,14 @@
   },
   "dependencies": {
     "@coooookies/windows-smtc-monitor": "^1.0.12",
+    "bot-avatars": "^0.1.1",
     "clsx": "^2.1.1",
     "electron-serve": "^3.0.0",
+    "geist": "^1.7.2",
+    "lucide-react": "^1.48.0",
     "motion": "^13.4.0",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "thinking-orbs": "^0.3.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 export interface Timer {
   remaining: number
   remainingMs: number
+  /** The full length of the current run, so progress can be drawn. */
+  durationMs: number
   isRunning: boolean
   finished: boolean
   start: (seconds: number) => void
@@ -13,6 +15,7 @@ export interface Timer {
 
 export function useTimer(): Timer {
   const [remainingMs, setRemainingMs] = useState(0)
+  const [durationMs, setDurationMs] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
   const [finished, setFinished] = useState(false)
   const deadlineRef = useRef<number | null>(null)
@@ -39,6 +42,7 @@ export function useTimer(): Timer {
     if (seconds <= 0) return
     deadlineRef.current = Date.now() + seconds * 1000
     setRemainingMs(seconds * 1000)
+    setDurationMs(seconds * 1000)
     setFinished(false)
     setIsRunning(true)
   }
@@ -46,6 +50,7 @@ export function useTimer(): Timer {
   const add = (seconds: number) => {
     const base = deadlineRef.current ?? Date.now()
     deadlineRef.current = base + seconds * 1000
+    setDurationMs((total) => total + seconds * 1000)
     setRemainingMs(Math.max(0, deadlineRef.current - Date.now()))
     setFinished(false)
     setIsRunning(true)
@@ -65,11 +70,13 @@ export function useTimer(): Timer {
     setIsRunning(false)
     setFinished(false)
     setRemainingMs(0)
+    setDurationMs(0)
   }
 
   return {
     remaining: Math.ceil(remainingMs / 1000),
     remainingMs,
+    durationMs,
     isRunning,
     finished,
     start,

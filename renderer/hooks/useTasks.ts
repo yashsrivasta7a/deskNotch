@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Task } from '../components/ui/task-list'
+export type Task = { id: string; label: string; done: boolean }
 
 /**
  * The one copy of the task list.
