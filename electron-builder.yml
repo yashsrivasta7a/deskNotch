@@ -1,6 +1,6 @@
-appId: com.devezio.desknotch
+appId: com.yashsrivasta7a.desknotch
 productName: deskNotch
-copyright: Copyright © 2026 Devezio.tech
+copyright: Copyright © 2026 yashsrivasta7a.in
 directories:
   output: dist
   buildResources: resources
