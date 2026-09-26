@@ -1,6 +1,93 @@
 # How deskNotch talks to Windows
 
-Everything below is where deskNotch genuinely touches Windows (settings and tasks are just JSON in a store file, so they are left out). None of it uses a native Node module: every feature leans on something Windows already provides.
+This file explains every place deskNotch reaches outside itself into Windows: reading what music is playing, noticing a screenshot, seeing that the microphone is on, and so on. Settings and tasks are left out; they are just a JSON file on disk.
+
+**New to Electron?** Read *Start here* first. It explains, from zero, the ideas every section below relies on. Each numbered section then opens with a short **In plain words** summary before the details, so you can read just those on a first pass.
+
+> The diagrams are [Mermaid](https://mermaid.js.org/). GitHub draws them as they are; VS Code-based editors need the **Markdown Preview Mermaid Support** extension (`bierner.markdown-mermaid`), otherwise they show as code.
+
+---
+
+## Start here: Electron in five minutes
+
+### What Electron is
+
+A normal website runs in a browser tab and is not allowed to touch your computer: it cannot read your files, see which apps are open, or run programs. That is on purpose; any website could be malicious.
+
+**Electron** lets you build a desktop app out of web technology (HTML, CSS, React) *and* gives it a way to touch the computer. It does this by running your app as **two separate programs** that talk to each other.
+
+### The two halves: renderer and main
+
+Think of a restaurant.
+
+| | Restaurant | deskNotch | Folder |
+|---|---|---|---|
+| **Renderer** | The dining room: what guests see. Waiters take orders but never cook. | The notch you see: React components, animations, buttons. It is a browser tab, so it **cannot** touch Windows. | [renderer/](renderer/) |
+| **Main** | The kitchen: guests never see it, but it can use the stove, the knives, the fridge. | A Node.js program with full access: files, the registry, running PowerShell, the window itself. | [main/](main/) |
+
+They are separate processes and share no memory. The only way to get something from the kitchen is to **pass a note through the hatch**. In Electron that note-passing is called **IPC** (inter-process communication).
+
+### The hatch: the preload bridge
+
+The renderer is not given the whole kitchen, only a small, fixed hatch. That hatch is [main/preload.ts](main/preload.ts). It runs before the page loads and puts exactly four functions on `window.bridge`:
+
+| Function | Meaning | Restaurant |
+|---|---|---|
+| `window.bridge.invoke('name', …)` | Ask main a question and **wait for the answer** (returns a Promise). | "One soup, please", then you wait for it. |
+| `window.bridge.send('name', …)` | Tell main something; **no answer**. | "Table 4 is leaving." |
+| `window.bridge.on('name', fn)` | Let main **tell the page** things whenever they happen. | The kitchen rings a bell: "order up". |
+| `window.bridge.pathOf(file)` | The real disk path of a file dropped on the page. | (a special case, for the Shelf) |
+
+The `'name'` is just a label, like `'files:describe'`. It only has to match on both sides. On the main side, the matching code is `ipcMain.handle('name', …)` (answers `invoke`) or `ipcMain.on('name', …)` (receives `send`), and `webContents.send('name', …)` rings the bell for `on`.
+
+A real pair from this repo. The page asks for a file's details:
+
+```ts
+// renderer (the dining room): renderer/hooks/useFiles.ts
+const items = await window.bridge.invoke('files:describe', ['C:\\Users\\me\\photo.jpg'])
+```
+
+and main answers it:
+
+```ts
+// main (the kitchen): main/ipc/files.ts
+ipcMain.handle('files:describe', async (_event, paths) =>
+  // stat each file, read its icon and thumbnail, send them back
+)
+```
+
+That is the whole pattern. Every feature below is some version of **the page asks, or main tells, through the hatch**.
+
+### How main actually talks to Windows
+
+Main is Node.js, which can already read files and start programs. For the rest, deskNotch uses four tools, and **no native modules** (no C++ code that has to be compiled against Electron):
+
+1. **Electron's own APIs**, which wrap Windows for you: `shell.openPath` (open a file with its app), `shell.trashItem` (Recycle Bin), `nativeImage` (thumbnails), `setIgnoreMouseEvents` (click-through).
+2. **Node's `fs`**, for files and folders, including `fs.watch`, which Windows backs with a real "tell me when this folder changes" API.
+3. **PowerShell**, Windows' built-in scripting shell. Main starts it as a child process, gives it a small script, and reads what it prints. PowerShell can read the **registry** (Windows' big settings database), call Windows APIs, and even compile a few lines of C#. It costs about 300ms to start, so the features that need it often keep **one PowerShell running** and reuse it.
+4. **Command-line tools** Windows ships with, like `reg.exe` (read the registry) and `netsh` (network information).
+
+### Follow one feature end to end: a screenshot
+
+Here is everything that happens, in order, when you press **Win+Shift+S**. Every step names the file it happens in.
+
+1. **Windows** saves the picture to `Pictures\Screenshots\Screenshot 2026-09-26 151904.png`. (Nothing of ours yet.)
+2. **Main** has been watching that folder since start-up with `fs.watch` ([main/ipc/screenshots.ts](main/ipc/screenshots.ts)). Windows tells it a file appeared.
+3. **Main** checks that it is a new image, and waits until the file stops growing (the Snipping Tool writes it in pieces).
+4. **Main rings the bell:** `webContents.send('screenshot:new', path)`.
+5. **The page** hears it, because [renderer/pages/home.tsx](renderer/pages/home.tsx) called `window.bridge.on('screenshot:new', …)`.
+6. **The page asks** for a thumbnail: `window.bridge.invoke('files:describe', [path])`.
+7. **Main answers** with the name, icon and a small preview image ([main/ipc/files.ts](main/ipc/files.ts)).
+8. **The page** opens the notch on the capture card ([CaptureView.tsx](renderer/components/widgets/CaptureView.tsx)) for a few seconds.
+9. You press **Discard**. **The page asks** `invoke('screenshot:discard', path)`, and **main** calls `shell.trashItem`, after checking the path really is inside the Screenshots folder. The page is never trusted to delete just anything.
+
+Every other feature is the same shape with different steps. Section 5 draws this one as a diagram.
+
+### Why the page never gets more power
+
+It would be simpler to hand the page Node.js directly. It is not done because the renderer is a browser; if anything unexpected ever ran in it, it would have the run of your disk. So the page can only ask for **specific, named things**, and main double-checks each request (is this really a path? is this app one we listed?). You will see those checks called out below.
+
+### The map: what each feature uses
 
 | Mechanism | What it is | Used for |
 |---|---|---|
@@ -16,18 +103,13 @@ Everything below is where deskNotch genuinely touches Windows (settings and task
 | **UserAssist** | Explorer's per-app launch and focus-time tally, behind the Start menu's "Most used". | Most used apps (§8) |
 | **Shell `AppsFolder` + `IShellItemImageFactory`** | The Start menu's own list of apps, and the shell's icon renderer. | App names, icons, launching (§8) |
 
-The notch runs in two halves, like every Electron app:
-
-- **Renderer** — the notch you see. React, in [renderer/](renderer/). It cannot touch the OS.
-- **Main** — a Node process with OS access, in [main/](main/). It does everything below and hands results to the renderer over **IPC** (`window.bridge.invoke('channel', …)` on one side, `ipcMain.handle('channel', …)` on the other).
-
-Every diagram uses those two lanes plus a third for Windows.
-
-> The diagrams are [Mermaid](https://mermaid.js.org/). GitHub draws them as-is; VS Code's built-in preview needs the **Markdown Preview Mermaid Support** extension (`bierner.markdown-mermaid`), otherwise they show as code.
+Every diagram below uses the same lanes: **Renderer** (the page), **Main** (the kitchen), and **Windows**.
 
 ---
 
 ## 1. Media playback
+
+> **In plain words:** Windows keeps one list of "what is playing right now" that every music and video app reports to. deskNotch listens to that list to show the song, and presses the keyboard's own media keys (play, next…) to control it, so it works with any player.
 
 Two directions: **reading** what's playing (continuous) and **controlling** it (on click). They use different mechanisms, because the library we read with can only observe.
 
@@ -113,6 +195,8 @@ Where the code is:
 
 ## 2. Opening the player (tap the album art)
 
+> **In plain words:** Tapping the album art finds the window of the app that is playing (Spotify, Chrome…) and brings it to the front, the same thing clicking it on the taskbar does.
+
 Tapping the art brings the app that's playing to the front, maximised. It relies on the `sourceAppId` that SMTC gave us in 1a.
 
 ```mermaid
@@ -147,6 +231,8 @@ Where the code is:
 ---
 
 ## 3. The Shelf tab (Recent and Pinned parked)
+
+> **In plain words:** A place to park files. Drop a file on the notch and its path is saved; drag it back out and Windows moves the real file wherever you drop it. Thumbnails come from the same place Explorer gets them.
 
 > **Current state:** only the Shelf is shown — a slim tray, left to right, that widens per file up to 640px and then scrolls sideways; files show a thumbnail where Windows has one, and a file dragged out and dropped elsewhere leaves the shelf. Recent and Pinned are commented out in `FileStrip.tsx`; their code below still exists and comes back by uncommenting.
 
@@ -227,6 +313,8 @@ Where the code is:
 
 ## 4. The notch window itself (click-through)
 
+> **In plain words:** The notch is drawn inside an invisible window as wide as your screen. So that the invisible part never steals your clicks, main checks where the mouse is 16 times a second and only lets the window take the click when you are actually over the notch.
+
 The notch lives in a transparent, frameless, always-on-top window as wide as the screen and 500px tall. Almost all of that window is empty, and it must never swallow a click meant for whatever is underneath.
 
 ```mermaid
@@ -253,6 +341,8 @@ sequenceDiagram
 
 ## 5. Screenshot catcher
 
+> **In plain words:** Windows saves every screenshot into a folder. deskNotch watches that folder, and when a new picture appears it opens the notch on it so you can drag it somewhere, keep it, or throw it away.
+
 Windows 11's Snipping Tool (Win+Shift+S, Print Screen) saves every capture to `Pictures\Screenshots`. Watching that folder catches them as real files, for the cost of a folder watch: no polling.
 
 ```mermaid
@@ -277,6 +367,8 @@ flowchart TD
 - Code: the watcher at [screenshots.ts:46](main/ipc/screenshots.ts#L46), the size check at [screenshots.ts:25](main/ipc/screenshots.ts#L25), the card in [CaptureView.tsx](renderer/components/widgets/CaptureView.tsx), opening and folding in `peek` in [home.tsx](renderer/pages/home.tsx).
 
 ## 6. Status watcher: privacy dots, Wi-Fi, Bluetooth
+
+> **In plain words:** One small PowerShell script runs in the background and keeps asking Windows three questions: is any app using the mic or camera, which Wi-Fi am I on, and which Bluetooth devices are connected. It only speaks up when an answer changes.
 
 One PowerShell, kept alive, answers three questions and prints a line only when an answer changes.
 
@@ -322,6 +414,8 @@ Code: [privacy.ts](main/ipc/privacy.ts) (script and watcher), [usePrivacy.ts](re
 
 ## 7. "Just connected" moments (headphones, Wi-Fi, Bluetooth)
 
+> **In plain words:** When something connects, the closed notch shows it for a second and a half, like AirPods on an iPhone. Headphones are noticed by the browser itself; Wi-Fi and Bluetooth come from the watcher in §6.
+
 When something connects, the closed bar gives itself to it for about a second and a half: the icon swings in, then the name and "Connected", then it slides away and the usual bar returns.
 
 ```mermaid
@@ -342,6 +436,8 @@ flowchart TD
 Code: [useHeadphones.ts](renderer/hooks/useHeadphones.ts), the moments in [home.tsx](renderer/pages/home.tsx), the view in [CollapsedStatus.tsx](renderer/components/notch/CollapsedStatus.tsx).
 
 ## 8. Most used and favourite apps
+
+> **In plain words:** Windows secretly counts how long you use each app (that is where the Start menu's "Most used" comes from). deskNotch reads that count, asks Windows for each app's real name and icon, and launches an app the same way the Start menu does.
 
 **Most used** is Windows' own count. Explorer keeps a tally per app under `UserAssist` (the Start menu's "Most used" is built from it). Each value's name is the app, **ROT13-encoded**, and its 72-byte data holds the launch count (bytes 4–7) and **time in focus in ms** (bytes 12–15).
 
@@ -373,6 +469,8 @@ sequenceDiagram
 - Code: tally at [apps.ts:25](main/ipc/apps.ts#L25), ROT13 at [apps.ts:22](main/ipc/apps.ts#L22), names and icons at [apps.ts:44](main/ipc/apps.ts#L44), the installed list at [apps.ts:131](main/ipc/apps.ts#L131).
 
 ## 9. Smaller touches
+
+> **In plain words:** A few small things that also read from Windows: your wallpaper (to tint the glass), your accent colour, and the "start with Windows" switch.
 
 | What | How it talks to Windows | Code |
 |---|---|---|
@@ -412,3 +510,35 @@ Defined at [main/ipc/media.ts:14](main/ipc/media.ts#L14).
 - **Headphones** are recognised by name; a pair whose driver calls it something unusual ("Speakers (…)") is not.
 - **Most used** reflects Windows' own tally, which Windows can reset (a new profile, some privacy cleaners); apps Windows cannot name are skipped.
 - **Icons** take about 2 s the first time (PowerShell compiles the helper), then come from the cache.
+
+
+---
+
+## Glossary
+
+| Term | Meaning |
+|---|---|
+| **Electron** | A framework for desktop apps built with web technology; each app runs as a renderer (the page) and a main process (with system access). |
+| **Renderer** | The page you see: React, running in a browser tab inside the app. Cannot touch Windows. [renderer/](renderer/) |
+| **Main process** | The Node.js side with full system access. [main/](main/) |
+| **IPC** | Inter-process communication: the messages between renderer and main. |
+| **Preload / bridge** | [main/preload.ts](main/preload.ts): the only functions the page is given (`window.bridge`). |
+| **`invoke` / `handle`** | Ask and answer: the page `invoke`s, main `handle`s and returns a value. |
+| **`send` / `on`** | One-way messages; `webContents.send` is main telling the page. |
+| **Channel** | The name on a message, like `'files:describe'`. |
+| **Node.js** | JavaScript outside the browser, with files, processes and networking. |
+| **PowerShell** | Windows' built-in scripting shell; main runs small scripts in it and reads their output. |
+| **Registry** | Windows' central settings database, a tree of keys and values (`HKCU\Software\…`). |
+| **`HKCU`** | "HKEY_CURRENT_USER": the part of the registry for the signed-in user. |
+| **SMTC** | System Media Transport Controls: Windows' shared "now playing" list. |
+| **`user32.dll`** | The Windows library that manages windows and keyboard input. |
+| **AUMID** | AppUserModelID: Windows' name for an installed app, like `Chrome` or `5319275A.WhatsAppDesktop_…!App`. |
+| **`shell:AppsFolder`** | A virtual folder holding every app in the Start menu; opening `shell:AppsFolder\<AUMID>` launches that app. |
+| **UserAssist** | A registry key where Explorer counts how often, and how long, you use each app. |
+| **ConsentStore** | The registry record of which apps used the microphone or camera, and when. |
+| **ROT13** | A trivial letter shift (A↔N, B↔O…) Windows uses to scramble UserAssist names. |
+| **Native module** | Compiled C/C++ code loaded by Node; powerful but has to be rebuilt for each Electron version. deskNotch uses none. |
+| **Worker thread** | A second JavaScript thread in main, so slow work (media) never freezes the notch. |
+| **Click-through** | A window that lets mouse clicks pass to whatever is underneath it. |
+| **Hit test** | Checking whether the mouse is over the notch, to decide who gets the click. |
+| **Mermaid** | A text format for diagrams, used throughout this file. |
