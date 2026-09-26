@@ -42,7 +42,7 @@ const VIEWS: ViewDefinition[] = [
 /** Each view sets the shell it needs; the notch springs between them. */
 const SIZES: Record<string, { width: number; height: number }> = {
   desk: { width: DESK_WIDTH, height: DESK_HEIGHT },
-  settings: { width: CHROME_X + 240 + 40 + 300, height: CHROME_Y + SETTINGS_PANE },
+  settings: { width: CHROME_X + 620, height: CHROME_Y + SETTINGS_PANE },
 }
 
 /** The notch's side padding around the card row. */
@@ -81,18 +81,37 @@ export default function HomePage() {
       depth = 0
       setDragging(false)
     }
+    // A drop anywhere on the notch lands on the shelf, not only on its well
+    // (which handles its own drops and marks them handled). If the shelf is
+    // not on screen yet (the notch was still opening), the paths are saved
+    // straight to its list and it shows them when it appears.
+    const drop = (event: DragEvent) => {
+      end()
+      if (event.defaultPrevented || !hasFiles(event)) return
+      event.preventDefault()
+      const paths = Array.from(event.dataTransfer?.files ?? [])
+        .map((file) => window.bridge?.pathOf(file) ?? '')
+        .filter(Boolean)
+      if (!paths.length) return
+      setView('files')
+      const taken = !window.dispatchEvent(new CustomEvent('shelf:add', { detail: paths, cancelable: true }))
+      if (!taken)
+        void window.bridge
+          ?.invoke<string[]>('store:get', 'shelf')
+          .then((list) => window.bridge?.invoke('store:set', 'shelf', [...(list ?? []).filter((p) => !paths.includes(p)), ...paths]))
+    }
     // Anything dropped outside a drop target must not navigate the window.
     const over = (event: DragEvent) => hasFiles(event) && event.preventDefault()
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragleave', leave)
     window.addEventListener('dragover', over)
-    window.addEventListener('drop', end)
+    window.addEventListener('drop', drop)
     window.addEventListener('dragend', end)
     return () => {
       window.removeEventListener('dragenter', enter)
       window.removeEventListener('dragleave', leave)
       window.removeEventListener('dragover', over)
-      window.removeEventListener('drop', end)
+      window.removeEventListener('drop', drop)
       window.removeEventListener('dragend', end)
     }
   }, [])
@@ -204,6 +223,8 @@ export default function HomePage() {
         setSettings({
           ...DEFAULT_SETTINGS,
           ...stored,
+          // Translucent became Glass, now a real blur.
+          notchStyle: (stored.notchStyle as string) === 'translucent' ? 'glass' : (stored.notchStyle ?? DEFAULT_SETTINGS.notchStyle),
           // Focus lives in the companion now; the glance card is retired.
           showFocus: false,
           // Older settings kept a list of topics under another name; the first
@@ -228,15 +249,25 @@ export default function HomePage() {
 
   catchScreenshots.current = settings.catchScreenshots ?? true
 
+  // Tabs taken off the dock. On a hidden one, move to the first still shown;
+  // with none shown, the notch simply opens on the glance.
+  const shownViews = VIEWS.filter((v) => !(settings.hiddenViews ?? []).includes(v.id))
+  useEffect(() => {
+    if (VIEWS.some((v) => v.id === view) && !shownViews.some((v) => v.id === view)) setView(shownViews[0]?.id ?? 'glance')
+  }, [settings.hiddenViews, view])
+
+  // The apps bar's place: on the right when the tabs dock is under the notch
+  // (so the two do not stack), otherwise under the notch; or wherever chosen.
+  // They never share a side: a chosen side the dock already has (older settings) falls back to auto.
+  const chosenApps = settings.appsSide ?? 'auto'
+  const dockSideNow = settings.dockSide ?? 'bottom'
+  const appsSide = chosenApps === 'auto' || chosenApps === dockSideNow ? (dockSideNow === 'bottom' ? 'right' : 'bottom') : chosenApps
+
   const isPlayingAudio = Boolean(nowPlaying?.isPlaying)
-  const tint =
-    isPlayingAudio && settings.albumTint
-      ? albumTint
-      : settings.notchStyle === 'glass'
-        ? wallpaperColor
-        : '255, 255, 255'
-  // The readings keep to the notch's own look — album art never recolours them.
-  const orbTint = settings.notchStyle === 'glass' ? wallpaperColor : '255, 255, 255'
+  // The style only changes the background: the glow follows the album (when
+  // that setting is on) and the readings stay white, whatever the material.
+  const tint = isPlayingAudio && settings.albumTint ? albumTint : '255, 255, 255'
+  const orbTint = '255, 255, 255'
 
   const shownLimits = settings.showAiUsage || nothingChosen ? visibleLimits(aiLimits, settings.hiddenLimits) : []
   // What the companion may speak about: the chosen windows, whether or not their cards are on.
@@ -314,9 +345,11 @@ export default function HomePage() {
             expandedHeight={size.height}
             dockSide={settings.dockSide ?? 'bottom'}
             keepOpen={holdOpen}
+            belowSide={appsSide}
             below={
               (settings.deskApps ?? 'most') !== 'off' && (settings.appsOn ?? ['files']).includes(view) ? (
                 <AppsRow
+                  side={appsSide}
                   mode={settings.deskApps ?? 'most'}
                   favorites={settings.favoriteApps ?? []}
                   onFavorites={(ids) => setSettings((s) => ({ ...s, favoriteApps: ids }))}
@@ -327,7 +360,7 @@ export default function HomePage() {
             closeKey={closeKey}
             rail={view === 'capture' || view === 'done' ? undefined : 
               <>
-                <ViewRail views={VIEWS} active={view} onChange={setView} />
+                <ViewRail views={shownViews} active={view} onChange={setView} />
                 <RailButton
                   label="Settings"
                   active={view === 'settings'}

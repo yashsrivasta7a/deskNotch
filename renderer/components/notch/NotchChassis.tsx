@@ -34,6 +34,7 @@ const radiusToken = (name: string, fallback: number) => {
 }
 
 import type { NotchStyle } from '../widgets/SettingsPanel'
+import { Backdrop } from './Backdrop'
 
 interface NotchChassisProps {
   /** The collapsed bar's content. A function gets the open state, for content
@@ -54,6 +55,8 @@ interface NotchChassisProps {
   dockSide?: DockSide
   /** A bar floating under the notch while open (the apps), below the dock if that is under it too. */
   below?: React.ReactNode
+  /** Where that bar sits: under the notch, or hanging beside it. */
+  belowSide?: 'left' | 'right' | 'bottom'
   /** Holds the notch open regardless of hover — for a running timer, say. */
   keepOpen?: boolean
   /** Told whenever the notch opens or closes. */
@@ -67,10 +70,12 @@ interface NotchChassisProps {
   bgTint?: string
 }
 
+/** The little inverted corners where the notch meets the screen's edge, and
+ *  the dock and apps tray: the surface's own colour, solid. */
 const CORNER_FILLS: Record<NotchStyle, string> = {
-  glass: 'rgba(14, 15, 20, 0.68)',
-  translucent: 'rgba(9, 10, 14, 0.52)',
-  black: '#000000',
+  black: '#0b0b0d',
+  mica: 'rgb(20, 20, 24)',
+  glass: 'rgb(20, 20, 24)',
 }
 
 /**
@@ -89,11 +94,12 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
   rail,
   dockSide = 'bottom',
   below,
+  belowSide = 'bottom',
   keepOpen = false,
   onOpenChange,
   closeKey = 0,
   className = '',
-  notchStyle = 'glass',
+  notchStyle = 'black',
   bgTint = '255, 255, 255',
 }) => {
   const [isHovered, setIsHovered] = useState(false)
@@ -127,10 +133,15 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
     leaving.current = null
   }
   useEffect(() => stopLeaving, [])
+  /** Everything that belongs to the notch: itself, the dock, the apps tray, and
+   *  any popover marked `data-notch-part` (the favourites picker). */
+  const parts = () =>
+    [shellRef.current, railRef.current, belowRef.current, ...Array.from(document.querySelectorAll<HTMLElement>('[data-notch-part]'))].filter(
+      (el): el is HTMLElement => Boolean(el),
+    )
   const distance = (x: number, y: number) =>
     Math.min(
-      ...[shellRef.current, railRef.current, belowRef.current]
-        .filter((el): el is HTMLDivElement => Boolean(el))
+      ...parts()
         .map((el) => {
           const r = el.getBoundingClientRect()
           return Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom))
@@ -173,6 +184,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
   const shellRef = useRef<HTMLDivElement>(null)
   const railRef = useRef<HTMLDivElement>(null)
   const belowRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     const report = () => {
@@ -180,8 +192,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
       if (!element) return
 
       // The notch, and the dock under it when it is out.
-      const rects = [element, railRef.current, belowRef.current]
-        .filter((el): el is HTMLDivElement => Boolean(el))
+      const rects = parts()
         .map((el) => el.getBoundingClientRect())
         .map((rect) => ({ x: rect.left, y: rect.top, width: rect.width, height: rect.height }))
       window.bridge?.send('notch:bounds', rects)
@@ -195,16 +206,40 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
     if (shellRef.current) observer.observe(shellRef.current)
     // The dock mounts and springs in a beat after opening; catch it once settled.
     const late = setTimeout(report, 500)
+    // Popovers open and close without resizing anything; a slow re-check while
+    // open keeps them clickable.
+    const tick = isOpen ? setInterval(report, 250) : undefined
 
     return () => {
       observer.disconnect()
       clearTimeout(late)
+      clearInterval(tick)
     }
   }, [isOpen, expandedWidth, expandedHeight])
 
   useEffect(() => {
     window.bridge?.send('notch:pinned', isPinned)
   }, [isPinned])
+
+  /** The apps tray, in the notch's own surface so the two read as one object:
+   *  a short row under the notch, or a column hanging beside it. */
+  const tray = (side: 'left' | 'right' | 'bottom') => (
+    <motion.div
+      key={`tray-${side}`}
+      ref={belowRef}
+      initial={{ opacity: 0, scale: 0.94, ...(side === 'bottom' ? { y: -10 } : { x: side === 'right' ? -10 : 10 }) }}
+      animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.12 } }}
+      transition={{ ...spring, delay: 0.06 }}
+      className={`pointer-events-auto relative isolate border ${side === 'bottom' ? 'rounded-[12px] px-3 py-1' : 'rounded-b-[12px] border-t-0 px-1 pb-1.5 pt-2'} ${
+        notchStyle === 'black' ? 'bg-[#0b0b0d] border-white/[0.07]' : 'border-white/[0.1]'
+      } shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9)]`}
+      style={notchStyle === 'black' ? undefined : { background: CORNER_FILLS[notchStyle] }}
+    >
+      {notchStyle !== 'black' && <Backdrop kind={notchStyle} host={belowRef} />}
+      {below}
+    </motion.div>
+  )
 
   return (
     <motion.div
@@ -248,61 +283,29 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
       </svg>
 
       <motion.main
+        ref={mainRef}
         initial={false}
         animate={{
           borderBottomLeftRadius: isOpen ? radius.open : radius.closed,
           borderBottomRightRadius: isOpen ? radius.open : radius.closed,
         }}
         transition={spring}
-        className={`relative w-full h-full text-white overflow-hidden flex flex-col
+        className={`relative isolate w-full h-full text-white overflow-hidden flex flex-col
                    border-b border-x border-t-0 transition-colors duration-300
                    ${
-                     notchStyle === 'glass'
-                       ? 'border-white/[0.13] shadow-[0_22px_55px_-10px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.2),inset_0_0_20px_rgba(255,255,255,0.02)]'
-                       : notchStyle === 'translucent'
-                         ? 'border-white/[0.08] shadow-[0_16px_40px_-10px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.1)]'
-                         : 'bg-black border-white/[0.07] shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9),inset_0_-1px_1px_rgba(255,255,255,0.05)]'
+                     notchStyle === 'black'
+                       ? 'bg-[#0b0b0d] border-white/[0.07] shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9),inset_0_-1px_1px_rgba(255,255,255,0.05)]'
+                       : 'border-white/[0.12] shadow-[0_22px_55px_-10px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.14)]'
                    }`}
         style={{
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
           willChange: 'border-radius',
-          ...(notchStyle === 'glass'
-            ? {
-                background:
-                  'linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(18, 19, 25, 0.62) 20%, rgba(10, 11, 15, 0.72) 100%)',
-              }
-            : notchStyle === 'translucent'
-              ? { background: 'rgba(9, 10, 14, 0.52)' }
-              : {}),
+          ...(notchStyle === 'black' ? {} : { background: CORNER_FILLS[notchStyle] }),
         }}
       >
-        {/* Specular hairline along top border in glassmorphic mode */}
-        {notchStyle === 'glass' && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-3 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/35 to-transparent z-20"
-          />
-        )}
-
-        {/* Ambient background adaptation glow in glassmorphic mode */}
-        {notchStyle === 'glass' && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -inset-x-8 -top-8 h-28 -z-10 blur-xl transition-all duration-700 opacity-70"
-            style={{
-              background: `radial-gradient(ellipse at 50% 0%, rgba(${bgTint}, 0.22) 0%, transparent 75%)`,
-            }}
-          />
-        )}
-
-        {/* Diagonal sheen in glassmorphic mode */}
-        {notchStyle === 'glass' && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_90%_at_25%_0%,rgba(255,255,255,0.06),transparent_60%)] -z-10"
-          />
-        )}
+        {/* Mica or Glass: what the surface shows through, open or closed. */}
+        {notchStyle !== 'black' && <Backdrop kind={notchStyle} host={mainRef} />}
 
         {ambient?.(isOpen)}
 
@@ -336,39 +339,79 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
         </AnimatePresence>
       </motion.main>
 
-      {/* The dock: a small capsule of circles, right up against the notch.
-          Under it (the default), it is centred, and the notch grows about its
-          centre, so it never slides sideways between views. Beside it, it
-          hangs from the screen's edge like a second, smaller island and
-          follows the notch's side as it resizes. */}
+      {/* Around the notch while it is open: the dock of tabs and the apps tray.
+          Under the notch they stack in one column (tray first, against the
+          notch); beside it they hang from the screen's edge, the dock nearest
+          the notch and the tray just outside it. The notch grows about its
+          centre, so nothing under it slides sideways between views. */}
       <DockSideContext.Provider value={dockSide}>
-        <AnimatePresence>
-          {isOpen && rail && (
-            <div
-              className={`pointer-events-none absolute flex ${
-                dockSide === 'bottom'
-                  ? 'inset-x-0 top-full justify-center pt-1.5'
-                  : dockSide === 'right'
-                    ? 'left-full top-0 pl-1.5'
-                    : 'right-full top-0 pr-1.5'
-              }`}
-            >
+        <div className="pointer-events-none absolute inset-x-0 top-full flex flex-col items-center gap-1.5 pt-1">
+          <AnimatePresence>{isOpen && below && belowSide === 'bottom' && tray('bottom')}</AnimatePresence>
+          <AnimatePresence>
+            {isOpen && rail && dockSide === 'bottom' && (
               <motion.div
+                  ref={railRef}
+                  initial={{ opacity: 0, scale: 0.92, ...(dockSide === 'bottom' ? { y: -10 } : { x: dockSide === 'right' ? -10 : 10 }) }}
+                  animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.12 } }}
+                  transition={{ ...spring, delay: 0.04 }}
+                  style={{
+                    transformOrigin: dockSide === 'bottom' ? 'top center' : dockSide === 'right' ? 'top left' : 'top right',
+                    ...(notchStyle === 'black' ? {} : { background: CORNER_FILLS[notchStyle] }),
+                  }}
+                  className={`pointer-events-auto relative isolate flex items-center gap-[3px] border shadow-[0_12px_30px_-10px_rgba(0,0,0,0.8)] ${
+                    dockSide === 'bottom' ? 'h-[32px] rounded-full px-1' : 'w-[32px] flex-col rounded-b-[16px] border-t-0 px-1 pb-1 pt-1.5'
+                  } ${notchStyle === 'black' ? 'bg-[#0b0b0d] border-white/[0.08]' : 'border-white/[0.1]'}`}
+                >
+                  {notchStyle !== 'black' && <Backdrop kind={notchStyle} host={railRef} />}
+                {rail}
+                  <div className={dockSide === 'bottom' ? 'mx-0.5 h-3.5 w-px bg-white/[0.1]' : 'my-0.5 h-px w-3.5 bg-white/[0.1]'} />
+                  {/* The lock: pinning is something you can see and do. */}
+                  <motion.button
+                    type="button"
+                    aria-label={isPinned ? 'Unpin' : 'Pin open'}
+                    aria-pressed={isPinned}
+                    whileTap={{ scale: 0.88 }}
+                    transition={spring}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setIsPinned((pinned) => !pinned)
+                    }}
+                    className={`group/rail relative grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full outline-none transition-colors duration-200 ${
+                      isPinned ? 'bg-white text-black' : 'text-white/45 hover:bg-white/[0.1] hover:text-white'
+                    }`}
+                  >
+                    {isPinned ? <Lock size={11} strokeWidth={2.2} /> : <LockOpen size={11} strokeWidth={2} />}
+                    <span className={railLabel(dockSide)}>{isPinned ? 'Unlock' : 'Keep open'}</span>
+                  </motion.button>
+                </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        {(['left', 'right'] as const).map((side) => (
+          <div
+            key={side}
+            className={`pointer-events-none absolute top-0 flex items-start gap-1.5 ${side === 'right' ? 'left-full pl-1.5' : 'right-full flex-row-reverse pr-1.5'}`}
+          >
+            <AnimatePresence>
+              {isOpen && rail && dockSide === side && (
+                <motion.div
                 ref={railRef}
-                initial={{ opacity: 0, scale: 0.92, ...(dockSide === 'bottom' ? { y: -10 } : { x: dockSide === 'right' ? -10 : 10 }) }}
+                initial={{ opacity: 0, scale: 0.92, x: dockSide === 'right' ? -10 : 10 }}
                 animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                 exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.12 } }}
                 transition={{ ...spring, delay: 0.04 }}
                 style={{
-                  transformOrigin: dockSide === 'bottom' ? 'top center' : dockSide === 'right' ? 'top left' : 'top right',
-                  ...(notchStyle === 'black' ? {} : { background: CORNER_FILLS[notchStyle], backdropFilter: 'blur(20px)' }),
+                  transformOrigin: dockSide === 'right' ? 'top left' : 'top right',
+                  ...(notchStyle === 'black' ? {} : { background: CORNER_FILLS[notchStyle] }),
                 }}
-                className={`pointer-events-auto flex items-center gap-[3px] border shadow-[0_12px_30px_-10px_rgba(0,0,0,0.8)] ${
-                  dockSide === 'bottom' ? 'h-[32px] rounded-full px-1' : 'w-[32px] flex-col rounded-b-[16px] border-t-0 px-1 pb-1 pt-1.5'
-                } ${notchStyle === 'black' ? 'bg-black border-white/[0.08]' : 'border-white/[0.1]'}`}
+                className={`pointer-events-auto relative isolate flex items-center gap-[3px] border shadow-[0_12px_30px_-10px_rgba(0,0,0,0.8)] ${
+                  'w-[32px] flex-col rounded-b-[16px] border-t-0 px-1 pb-1 pt-1.5'
+                } ${notchStyle === 'black' ? 'bg-[#0b0b0d] border-white/[0.08]' : 'border-white/[0.1]'}`}
               >
+                {notchStyle !== 'black' && <Backdrop kind={notchStyle} host={railRef} />}
                 {rail}
-                <div className={dockSide === 'bottom' ? 'mx-0.5 h-3.5 w-px bg-white/[0.1]' : 'my-0.5 h-px w-3.5 bg-white/[0.1]'} />
+                <div className={'my-0.5 h-px w-3.5 bg-white/[0.1]'} />
                 {/* The lock: pinning is something you can see and do. */}
                 <motion.button
                   type="button"
@@ -388,46 +431,12 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
                   <span className={railLabel(dockSide)}>{isPinned ? 'Unlock' : 'Keep open'}</span>
                 </motion.button>
               </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-      </DockSideContext.Provider>
-
-      {/* The bar under the notch: its own floating tray, centred, springing
-          down out of the notch as it opens (under the dock when that is below). */}
-      <AnimatePresence>
-        {isOpen && below && (
-          <div
-            className="pointer-events-none absolute inset-x-0 top-full flex justify-center"
-            style={{ paddingTop: dockSide === 'bottom' && rail ? 6 + 32 + 4 : 4 }}
-          >
-            <motion.div
-              ref={belowRef}
-              initial={{ opacity: 0, y: -10, scale: 0.94 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.96, transition: { duration: 0.12 } }}
-              transition={{ ...spring, delay: 0.06 }}
-              // The notch's own surface, edge and all, so the two read as one object.
-              className={`pointer-events-auto rounded-[12px] border px-3 py-1 ${
-                notchStyle === 'glass'
-                  ? 'border-white/[0.13] shadow-[0_22px_55px_-10px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.2)]'
-                  : notchStyle === 'translucent'
-                    ? 'border-white/[0.08] shadow-[0_16px_40px_-10px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.1)]'
-                    : 'bg-black border-white/[0.07] shadow-[0_18px_50px_-12px_rgba(0,0,0,0.9)]'
-              }`}
-              style={
-                notchStyle === 'glass'
-                  ? { background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(18, 19, 25, 0.62) 20%, rgba(10, 11, 15, 0.72) 100%)' }
-                  : notchStyle === 'translucent'
-                    ? { background: 'rgba(9, 10, 14, 0.52)' }
-                    : undefined
-              }
-            >
-              {below}
-            </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>{isOpen && below && belowSide === side && tray(side)}</AnimatePresence>
           </div>
-        )}
-      </AnimatePresence>
+        ))}
+      </DockSideContext.Provider>
     </motion.div>
   )
 }

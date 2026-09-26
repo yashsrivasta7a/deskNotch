@@ -1,5 +1,5 @@
 /** Readings about the machine itself. */
-import { ipcMain, systemPreferences } from 'electron'
+import { BrowserWindow, desktopCapturer, ipcMain, screen, systemPreferences } from 'electron'
 import os from 'os'
 import fs from 'fs'
 import path from 'path'
@@ -41,6 +41,27 @@ export function registerSystemIpc() {
       }
     } catch {}
     return null
+  })
+
+  /**
+   * Glass: the notch shows a live, blurred view of what is behind it. For
+   * that, Windows is asked to leave this window out of screen capture
+   * (`setContentProtection`, WDA_EXCLUDEFROMCAPTURE), so capturing the screen
+   * returns what is underneath the notch rather than the notch itself. The
+   * cost, said plainly in Settings: while Glass is on, the notch does not
+   * appear in screenshots or screen shares.
+   */
+  ipcMain.handle('glass:protect', (event, on: unknown) => {
+    BrowserWindow.fromWebContents(event.sender)?.setContentProtection(on === true)
+  })
+
+  /** The capture source for the display the notch is on, for the renderer to stream. */
+  ipcMain.handle('glass:source', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return null
+    const display = screen.getDisplayMatching(window.getBounds())
+    const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
+    return (sources.find((s) => s.display_id === String(display.id)) ?? sources[0])?.id ?? null
   })
 }
 

@@ -106,7 +106,7 @@ const describe = (ids: string[]) =>
     })
   })
 
-const COUNT = 7
+const COUNT = 12
 const FRESH = 30 * 60_000
 let cache: { at: number; apps: TopApp[] } | null = null
 

@@ -572,6 +572,8 @@ sequenceDiagram
 
 | What | How it talks to Windows | Code |
 |---|---|---|
+| **Mica** style | The wallpaper file Windows keeps (below), drawn blurred and darkened, sized to the display and shifted by the notch's position, so the notch shows the part of the wallpaper it covers (Windows 11's own Mica works the same way) | [Backdrop.tsx](renderer/components/notch/Backdrop.tsx) |
+| **Glass** style | A live capture of the screen, blurred, shown only while the notch is open, at 15 fps. The window is excluded from capture with `setContentProtection(true)` (WDA_EXCLUDEFROMCAPTURE), so the capture shows what is **behind** the notch, not the notch; `desktopCapturer` picks the display's source and the renderer streams it with `getUserMedia` | [system.ts](main/ipc/system.ts), [Backdrop.tsx](renderer/components/notch/Backdrop.tsx) |
 | Glass tint from the wallpaper | Reads `%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper`, the copy of the current wallpaper Windows keeps | [system.ts:20](main/ipc/system.ts#L20) |
 | Accent colour | `systemPreferences.getAccentColor()`, the colour set in Personalisation | [system.ts:40](main/ipc/system.ts#L40) |
 | 12-hour clock | Built from the system time; the closed bar shows it on the left whenever no focus session or music is running | [time.ts](renderer/lib/time.ts) |
@@ -607,6 +609,7 @@ Defined at [main/ipc/media.ts:14](main/ipc/media.ts#L14).
 - **Wi-Fi and Bluetooth moments** lag by up to ~10 s and ~30 s: the Bluetooth check asks every paired device, which is too slow to do often. Ethernet has no moment.
 - **Headphones** are recognised by name; a pair whose driver calls it something unusual ("Speakers (…)") is not.
 - **Most used** reflects Windows' own tally, which Windows can reset (a new profile, some privacy cleaners); apps Windows cannot name are skipped.
+- **Glass** hides the notch from screenshots and screen sharing while it is on: that is how Windows' capture exclusion works, and without it the capture would see the notch itself. It also costs a little GPU while the notch is open (a 15 fps stream, blurred). Mica shows the wallpaper, not the windows behind.
 - **Icons** take about 2 s the first time (PowerShell compiles the helper), then come from the cache.
 
 

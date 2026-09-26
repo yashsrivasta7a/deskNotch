@@ -33,11 +33,24 @@ export function useFileList(key: 'shelf' | 'pins') {
     void window.bridge?.invoke('store:set', key, items.map((item) => item.path))
   }, [items, key])
 
+
   const add = useCallback(async (paths: string[]) => {
     const found = (await window.bridge?.invoke<FileItem[]>('files:describe', paths)) ?? []
     // Left to right in the order they arrive: new files join the right end.
     setItems((prev) => [...prev.filter((item) => !found.some((f) => f.path === item.path)), ...found])
   }, [])
+
+  // A file dropped anywhere on the notch, not just on the shelf's well, is
+  // announced as 'shelf:add'; the shelf takes it and says so (preventDefault).
+  useEffect(() => {
+    if (key !== 'shelf') return
+    const take = (event: Event) => {
+      event.preventDefault()
+      void add((event as CustomEvent<string[]>).detail)
+    }
+    window.addEventListener('shelf:add', take)
+    return () => window.removeEventListener('shelf:add', take)
+  }, [key])
 
   const remove = useCallback((file: string) => setItems((prev) => prev.filter((item) => item.path !== file)), [])
 

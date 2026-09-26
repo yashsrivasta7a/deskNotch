@@ -5,7 +5,7 @@ import { dragFile, openFile, type FileItem } from '../../hooks/useFiles'
 
 /** The capture card's content height; the notch's size for it follows. */
 export const CAPTURE_HEIGHT = 96
-export const CAPTURE_WIDTH = 400
+export const CAPTURE_WIDTH = 372
 
 const spring = { type: 'spring' as const, stiffness: 420, damping: 26 }
 
