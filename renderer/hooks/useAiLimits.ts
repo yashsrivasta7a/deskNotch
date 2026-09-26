@@ -11,6 +11,12 @@ export type ProviderLimits =
   | { name: string; limits: Limit[] }
   | { name: string; error: 'expired' | 'unavailable' }
 
+/** Every mounted poller's "check now", for a retry button anywhere. */
+const refreshers = new Set<() => Promise<void>>()
+
+/** Checks the limits again right away, past any back-off. */
+export const refreshAiLimits = () => Promise.all([...refreshers].map((refresh) => refresh())).then(() => undefined)
+
 /** Plan limits for every signed-in AI tool, polled from the main process.
  *  Disabled, it makes no requests at all. */
 export function useAiLimits(enabled = true) {
@@ -18,17 +24,20 @@ export function useAiLimits(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
-    const read = () => {
-      window.bridge
-        ?.invoke<ProviderLimits[]>('ai:limits')
+    const read = (force = false) =>
+      (window.bridge?.invoke<ProviderLimits[]>('ai:limits', force) ?? Promise.resolve([]))
         .then(setProviders)
         .catch(() => setProviders([]))
-    }
 
-    read()
+    void read()
+    const refresh = () => read(true)
+    refreshers.add(refresh)
     // Limits move over minutes, and these are the providers' servers — no need to hammer them.
-    const timer = setInterval(read, 120000)
-    return () => clearInterval(timer)
+    const timer = setInterval(() => void read(), 120000)
+    return () => {
+      clearInterval(timer)
+      refreshers.delete(refresh)
+    }
   }, [enabled])
 
   return providers

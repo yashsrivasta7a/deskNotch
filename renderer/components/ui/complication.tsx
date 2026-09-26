@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { ThinkingOrb, makeProj, finalizeFrame, MODE_FRAMES, STATE_TO_MODE, type Dot, type ModeFrame } from 'thinking-orbs'
 
 /** Dots on latitude rings, so a turning globe reads as turning. */
@@ -74,7 +74,6 @@ interface ComplicationProps {
 export const Complication: React.FC<ComplicationProps> = ({ fill, shape = 'globe', color, value, label, hint, idle, compact, onClick }) => {
   const [hovered, setHovered] = useState(false)
   const frame = useMemo(() => (shape === 'ring' ? ringFrame(fill) : tankFrame(fill)), [fill, shape])
-  const caption = hovered && hint ? hint : label
 
   return (
     <div
@@ -88,7 +87,7 @@ export const Complication: React.FC<ComplicationProps> = ({ fill, shape = 'globe
       onKeyDown={(event) => onClick && event.key === 'Enter' && onClick()}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={`flex shrink-0 flex-col items-center outline-none ${compact ? 'w-[64px]' : 'w-[72px]'} ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`group/c flex shrink-0 flex-col items-center outline-none ${compact ? 'w-[64px]' : 'w-[72px]'} ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
     >
       <motion.div
         className="relative -mt-2 mb-0"
@@ -112,29 +111,31 @@ export const Complication: React.FC<ComplicationProps> = ({ fill, shape = 'globe
       </motion.div>
 
       {!compact && (
+        // The reading: the number leads, its unit sits small beside it.
         <span
-          className="mt-2 text-[11px] font-semibold tabular-nums leading-none tracking-[-0.01em]"
+          className="mt-3 flex items-baseline gap-[1px] text-[17px] font-semibold tabular-nums leading-none tracking-[-0.03em]"
           style={{ color: idle ? 'rgba(255,255,255,0.4)' : color }}
         >
-          {value}
+          {value.endsWith('%') ? (
+            <>
+              {value.slice(0, -1)}
+              <span className="text-[10px] font-medium text-white/40">%</span>
+            </>
+          ) : (
+            value
+          )}
         </span>
       )}
 
       {!compact && (
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span
-          key={caption}
-          initial={{ opacity: 0, y: 2 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -2 }}
-          transition={{ duration: 0.12 }}
-          className={`mt-1.5 whitespace-nowrap text-[7.5px] leading-none tabular-nums ${
-            caption === label ? 'font-bold uppercase tracking-[0.1em] text-white/30' : 'font-medium text-white/55'
-          }`}
-        >
-          {caption}
-        </motion.span>
-      </AnimatePresence>
+        // The label at rest; on hover, the detail fades in over it. Plain CSS
+        // hover, so nothing that moves the pointer programmatically can stop it.
+        <span className="relative mt-2 grid h-[11px] place-items-center whitespace-nowrap text-[10px] font-medium leading-none tabular-nums">
+          <span className={`col-start-1 row-start-1 text-white/45 transition-opacity duration-150 ${hint ? 'group-hover/c:opacity-0' : ''}`}>{label}</span>
+          {hint && (
+            <span className="col-start-1 row-start-1 text-white/80 opacity-0 transition-opacity duration-150 group-hover/c:opacity-100">{hint}</span>
+          )}
+        </span>
       )}
     </div>
   )

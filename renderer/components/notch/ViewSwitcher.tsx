@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { createContext, useContext } from 'react'
 import { motion } from 'motion/react'
 
 const spring = { type: 'spring' as const, stiffness: 400, damping: 32 }
@@ -6,76 +6,70 @@ const spring = { type: 'spring' as const, stiffness: 400, damping: 32 }
 export interface ViewDefinition {
   id: string
   label: string
+  icon: React.ReactNode
 }
 
-interface ViewSwitcherProps {
-  views: ViewDefinition[]
-  active: string
-  onChange: (id: string) => void
-}
+/** Where the dock sits: beside the notch on either side, or under it. */
+export type DockSide = 'left' | 'right' | 'bottom'
+export const DockSideContext = createContext<DockSide>('bottom')
 
-/**
- * The views, as words at the left of the notch's top bar — where a toolbar
- * puts the places you can go. Words, not icons: nobody should have to guess.
- *
- * The highlight is a shared layoutId, so it slides between tabs instead of
- * fading in and out; the movement is what says they are one control.
- */
-export const ViewSwitcher: React.FC<ViewSwitcherProps> = ({ views, active, onChange }) => (
-  <div className="flex items-center gap-1">
-    {views.map((view) => {
-      const isActive = view.id === active
+const LABEL_BASE =
+  'pointer-events-none absolute whitespace-nowrap rounded-full bg-[#1c1c1f] px-2 py-[3px] text-[10.5px] font-medium text-white/85 opacity-0 shadow-[0_0_0_1px_rgba(255,255,255,0.08)] transition-[opacity,transform] duration-150 group-hover/rail:opacity-100 group-hover/rail:delay-300'
 
-      return (
-        <button
-          key={view.id}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            onChange(view.id)
-          }}
-          aria-label={view.label}
-          aria-pressed={isActive}
-          className="relative h-[24px] rounded-full px-3 outline-none"
-        >
-          {isActive && (
-            <motion.span layoutId="view-switcher-active" transition={spring} className="absolute inset-0 rounded-full bg-white/[0.12]" />
-          )}
-          <span
-            className={`relative -mt-px block text-[11.5px] font-medium leading-none transition-colors duration-200 ${
-              isActive ? 'text-white' : 'text-white/40 hover:text-white/80'
-            }`}
-          >
-            {view.label}
-          </span>
-        </button>
-      )
-    })}
-  </div>
-)
+/** A circle's name, shown on the dock's open side after a short hover, the way
+ *  macOS tooltips wait. */
+export const railLabel = (side: DockSide) =>
+  `${LABEL_BASE} ${
+    side === 'bottom'
+      ? 'left-1/2 top-[calc(100%+10px)] -translate-x-1/2 -translate-y-1 group-hover/rail:translate-y-0'
+      : side === 'right'
+        ? 'left-[calc(100%+12px)] top-1/2 -translate-y-1/2 -translate-x-1 group-hover/rail:translate-x-0'
+        : 'right-[calc(100%+12px)] top-1/2 -translate-y-1/2 translate-x-1 group-hover/rail:translate-x-0'
+  }`
 
-/** A small round button for the right of the bar: a control, not a place. */
-export const BarButton: React.FC<{
+/** One circle on the dock. Its name slides out beside it on hover, so an icon
+ *  never has to be guessed. */
+export const RailButton: React.FC<{
   label: string
   active?: boolean
+  /** The highlight slides between views on a shared id; controls get their own. */
+  layoutId?: string
   onClick: () => void
   children: React.ReactNode
-}> = ({ label, active, onClick, children }) => (
+}> = ({ label, active, layoutId, onClick, children }) => {
+  const side = useContext(DockSideContext)
+  return (
   <motion.button
     type="button"
     aria-label={label}
     aria-pressed={active}
-    title={label}
-    whileTap={{ scale: 0.9 }}
+    whileTap={{ scale: 0.88 }}
     transition={spring}
     onClick={(event) => {
       event.stopPropagation()
       onClick()
     }}
-    className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full outline-none transition-colors ${
-      active ? 'bg-white text-black' : 'text-white/35 hover:bg-white/[0.08] hover:text-white'
+    className={`group/rail relative grid h-[24px] w-[24px] shrink-0 place-items-center rounded-full outline-none transition-colors duration-200 ${
+      active ? 'text-black' : 'text-white/45 hover:bg-white/[0.1] hover:text-white'
     }`}
   >
-    {children}
+    {active && <motion.span layoutId={layoutId} transition={spring} className="absolute inset-0 rounded-full bg-white" />}
+    <span className="relative">{children}</span>
+    <span className={railLabel(side)}>{label}</span>
   </motion.button>
+  )
+}
+
+/**
+ * The places to go, as circles on the dock beside or under the notch: out of
+ * the notch, so the notch is all content.
+ */
+export const ViewRail: React.FC<{ views: ViewDefinition[]; active: string; onChange: (id: string) => void }> = ({ views, active, onChange }) => (
+  <>
+    {views.map((view) => (
+      <RailButton key={view.id} label={view.label} active={view.id === active} layoutId="rail-active" onClick={() => onChange(view.id)}>
+        {view.icon}
+      </RailButton>
+    ))}
+  </>
 )

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { formatLength, lengthSeconds } from '../../lib/focus'
 import { Plus } from 'lucide-react'
 import { QuickAdd } from './QuickAdd'
 import { AnimatePresence, motion } from 'motion/react'
@@ -34,7 +35,7 @@ export const FocusTile: React.FC<{ timer: Timer; tasks?: TaskStore; minutes: num
     <Tile
       width={FOCUS_WIDTH}
       label={isRunning ? 'Pause focus' : 'Start focus'}
-      onClick={adding ? undefined : () => (isRunning ? stop() : paused ? start(remainingMs / 1000) : start(minutes * 60))}
+      onClick={adding ? undefined : () => (isRunning ? stop() : paused ? start(remainingMs / 1000) : start(lengthSeconds(minutes)))}
     >
       <div className="flex h-full items-center gap-3">
         <div className="-ml-1 shrink-0">
@@ -56,7 +57,7 @@ export const FocusTile: React.FC<{ timer: Timer; tasks?: TaskStore; minutes: num
             className="text-[26px] font-semibold leading-none tracking-[-0.03em] transition-colors"
             style={{ color: active ? FOCUS_COLOR : finished ? FOCUS_COLOR : 'rgba(255,255,255,0.9)' }}
           >
-            {active ? clock(remainingMs) : finished ? 'Break' : `${minutes}:00`}
+            {active ? clock(remainingMs) : finished ? 'Break' : formatLength(minutes)}
           </span>
 
           {tasks ? (

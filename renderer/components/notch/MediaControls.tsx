@@ -10,11 +10,13 @@ const spring = { type: 'spring' as const, stiffness: 400, damping: 30 }
 
 interface ControlButtonProps {
   label: string
+  /** The main control: a filled disc rather than a bare glyph. */
+  solid?: boolean
   onClick?: () => void
   children: React.ReactNode
 }
 
-const ControlButton: React.FC<ControlButtonProps> = ({ label, onClick, children }) => (
+const ControlButton: React.FC<ControlButtonProps> = ({ label, solid, onClick, children }) => (
   <motion.button
     type="button"
     aria-label={label}
@@ -25,9 +27,9 @@ const ControlButton: React.FC<ControlButtonProps> = ({ label, onClick, children 
     whileHover={{ scale: 1.12 }}
     whileTap={{ scale: 0.92 }}
     transition={spring}
-    className="grid place-items-center w-7 h-7 rounded-full text-white/55
-               hover:text-white hover:bg-white/10 transition-colors
-               focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/40"
+    className={`grid place-items-center rounded-full transition-colors ${
+      solid ? 'w-8 h-8 bg-white text-black hover:bg-white/90' : 'w-7 h-7 text-white/60 hover:text-white hover:bg-white/10'
+    } focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/40`}
   >
     {children}
   </motion.button>
@@ -51,7 +53,7 @@ export const MediaControls: React.FC<MediaControlsProps> = ({
       <SkipBack size={13} {...glyph} />
     </ControlButton>
 
-    <ControlButton label={isPlaying ? 'Pause' : 'Play'} onClick={onPlayPause}>
+    <ControlButton label={isPlaying ? 'Pause' : 'Play'} solid onClick={onPlayPause}>
       {isPlaying ? <Pause size={15} {...glyph} /> : <Play size={15} {...glyph} />}
     </ControlButton>
 

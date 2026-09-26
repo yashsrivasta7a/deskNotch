@@ -1,7 +1,8 @@
 # deskNotch — design notes
 
-Notes on the two decisions that shape this codebase, written down so they don't
-have to be re-derived later.
+Notes on the decisions that shape this codebase, written down so they don't
+have to be re-derived later. How each feature talks to Windows is in
+[HowItWorks.md](HowItWorks.md).
 
 ---
 
@@ -12,13 +13,13 @@ have to be re-derived later.
 The window used to *be* the notch: a 240×30 `BrowserWindow`, positioned at the
 centre of the screen's top edge.
 
-Now the window is an invisible strip spanning the full screen width, 400px tall,
+Now the window is an invisible strip spanning the full screen width, 500px tall,
 and the notch is a `<div>` drawn inside it.
 
 ```
 Before:                        After:
 ┌────┐  window = notch         ┌──────────────────────────┐ window (invisible)
-│▓▓▓▓│  240×30                 │         ┌────┐           │ full width × 400
+│▓▓▓▓│  240×30                 │         ┌────┐           │ full width × 500
 └────┘                         │         │▓▓▓▓│           │ notch = div
                                │         └────┘           │
                                └──────────────────────────┘
@@ -53,8 +54,9 @@ means a mistake costs one window, not the app.
 | Click-through, always-on-top | `main.ts` | Yes |
 
 **The one constraint:** the notch can only animate *within* the strip. It is
-400px tall, so an expanded height of 380 is fine and 420 gets clipped. Raising
-that limit is the one visual change that still needs a `main.ts` edit.
+500px tall, and it has to hold the tallest view (Settings) plus the dock and the
+apps bar floating under it, and their hover labels. Raising that limit is the
+one visual change that still needs a `main.ts` edit.
 
 ### The cost
 
@@ -142,6 +144,9 @@ the renderer and can see both sides.
 // main/preload.ts
 contextBridge.exposeInMainWorld('ipc', handler)
 ```
+
+(In this codebase the name is `bridge`: `window.bridge`, with `send`, `invoke`, `on`
+and `pathOf`, the last for the real path of a dropped file.)
 
 This puts `window.ipc` in the renderer, exposing only what `handler` contains —
 not `ipcRenderer` itself, and not `fs`. Whatever is added there is the entire
@@ -308,6 +313,23 @@ actually over the notch.
 60ms is under the threshold where a click feels like it missed, and cheap
 enough to leave running.
 
+### More than one rectangle
+
+The notch is no longer the only thing that takes clicks: the dock of views sits
+beside or under it, and the apps bar floats under it. The renderer reports all
+of them as a list, and the cursor counts as inside if it is in any.
+
+### Closing by intent, with the real cursor
+
+Closing on `mouseleave` failed in two ways. The notch changes size under a still
+pointer (switch to the smaller Shelf and its edge jumps away), and past the edge
+the window stops taking the mouse, so the page is told the pointer left the moment
+it crosses. So leaving only starts watching: the main process, which polls the
+cursor anyway, sends its real position whenever it moves (`notch:cursor`), and the
+notch closes once the pointer is more than 48px away and still heading away.
+Browser mouse events cannot be trusted for this: while the notch resizes, Chromium
+sends moves for a pointer that never moved.
+
 ### Keyboard focus follows the pin, not the hover
 
 The window has to be focusable for text fields inside it to accept typing.
@@ -319,16 +341,23 @@ only time there is anything to type into.
 
 ## 6. Views
 
-Everything cannot share one row. Music, tasks, the calendar, a photo and
-settings would each be a sliver.
+Everything cannot share one row. Music, tasks, a photo and settings would each
+be a sliver.
 
-The notch holds several views instead, with a rail to switch between them, and
-each view sets the shell size it needs. The rail is fixed to the right of the
-expanded panel rather than the collapsed bar, so the button just used does not
-move when the view changes.
+The notch holds several views instead (Glance, Desk, Shelf, and Settings), and
+each view sets the shell size it needs. There is no bar across the top when it
+is open: the notch is all content. The views, settings and the lock are circles
+on a small **dock** of their own, right against the notch, on the left, right or
+bottom (a setting). Under it, the dock is centred and the notch grows about its
+centre, so the button just pressed stays under the pointer as the view changes
+size.
 
-Settings sits below the rail, separated from it: it opens a panel, it is not a
-place to be, and grouping it with the views would say otherwise.
+Settings sits after the views, separated from them: it opens a panel, it is not a
+place to be, and grouping it with the views would say otherwise. The lock is last.
+
+Some moments borrow the notch for a few seconds (a screenshot, a finished focus
+session): a view of their own, the dock hidden, and the previous view back once
+the notch folds away (`peek` in `home.tsx`).
 
 ### What the glance row shows is a setting
 
@@ -348,7 +377,7 @@ the moment either changes.
 
 ```
 main/
-  main.ts           window, hit testing, lifecycle
+  main.ts           window, hit testing, the cursor feed, lifecycle
   preload.ts        the renderer's bridge
   store.ts          the JSON file, and nothing else
   smtc.ts           media host
@@ -357,8 +386,14 @@ main/
     index.ts        registers every handler
     store.ts        get/set
     photo.ts        the file picker
-    system.ts       memory and uptime
+    system.ts       wallpaper and accent colour
     settings.ts     start-on-boot
+    limits.ts       AI plan limits (Claude, Codex), cached and backed off
+    media.ts        media keys, opening the player
+    files.ts        the shelf: describe, thumbnails, open, reveal, drag out
+    screenshots.ts  the Screenshots folder watch, discard
+    privacy.ts      mic/camera in use, Wi-Fi, Bluetooth (one PowerShell)
+    apps.ts         most used (UserAssist), installed apps, icons, launch
 ```
 
 `store.ts` had grown to hold the file, a photo picker, system stats and a login
@@ -379,6 +414,8 @@ else is touched, and no file grows because a feature had nowhere else to go.
 - **Corner radius** → the tokens at the top of `renderer/styles/globals.css`.
 - **Glass surfaces** → the `.glass` and `.glass-control` classes in the same file.
 - **Strip height, always-on-top, click-through** → `main/main.ts`, needs a restart.
+- **Padding inside the open notch** → `PAD` in `NotchChassis.tsx`; every view sizes itself from it.
+- **A moment that opens the notch by itself** → `peek(view, ms)` in `renderer/pages/home.tsx`.
 - **`npm run dev:norestart`** → rebuilds `main/` on save without relaunching Electron.
 - **App won't start, `Cannot read properties of undefined (reading 'whenReady')`** →
   `ELECTRON_RUN_AS_NODE=1` is set in the environment. It makes Electron run as

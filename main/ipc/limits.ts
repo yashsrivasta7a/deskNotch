@@ -6,7 +6,7 @@
  * ponytail: no token refresh here — refreshing rotates the token the tool itself
  * relies on. The tool refreshes it next time it runs; the file is re-read each poll.
  */
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -37,14 +37,40 @@ const readJson = async (file: string) =>
 const lastGood = new Map<string, { at: number; value: ProviderLimits }>()
 const MIN_GAP = 60_000
 
-async function cached(name: string, read: () => Promise<ProviderLimits | null>) {
+/** Last good readings are kept on disk too, so a restart shows numbers at once
+ *  instead of "unavailable" while the endpoint is rate-limiting. */
+const CACHE = () => path.join(app.getPath('userData'), 'limits-cache.json')
+let loaded = false
+const loadCache = async () => {
+  if (loaded) return
+  loaded = true
+  try {
+    const saved = JSON.parse(await fs.promises.readFile(CACHE(), 'utf8')) as Record<string, { at: number; value: ProviderLimits }>
+    for (const [name, entry] of Object.entries(saved)) if (!lastGood.has(name)) lastGood.set(name, entry)
+  } catch {
+    // No cache yet.
+  }
+}
+const saveCache = () => fs.promises.writeFile(CACHE(), JSON.stringify(Object.fromEntries(lastGood))).catch(() => {})
+
+/** A tool that answered "too many requests" is left alone until this time.
+ *  Claude's usage endpoint allows only a few calls, shared with Claude Code. */
+const BACKOFF = 5 * 60_000
+const blockedUntil = new Map<string, number>()
+
+/** `force`: someone pressed retry, so the back-off is skipped. */
+async function cached(name: string, read: () => Promise<ProviderLimits | null>, force = false) {
+  await loadCache()
   const previous = lastGood.get(name)
   if (previous && Date.now() - previous.at < MIN_GAP) return previous.value
+  if (!force && (blockedUntil.get(name) ?? 0) > Date.now()) return previous?.value ?? { name, error: 'unavailable' as const }
   const value = await read()
   if (value && 'limits' in value) {
     lastGood.set(name, { at: Date.now(), value })
+    void saveCache()
     return value
   }
+  if (value && 'error' in value && value.error === 'unavailable') blockedUntil.set(name, Date.now() + BACKOFF)
   // A signed-out tool (null) drops out; any other failure keeps the last reading.
   return value && previous ? previous.value : value
 }
@@ -72,7 +98,7 @@ async function fetchLimits(
   }
 }
 
-const claude = () =>
+const claude = (force?: boolean) =>
   cached('Claude', () => fetchLimits(
     'Claude',
     async () => {
@@ -90,9 +116,9 @@ const claude = () =>
         body.five_hour && { label: 'SESSION', used: clamp(body.five_hour.utilization), resetsAt: body.five_hour.resets_at },
         body.seven_day && { label: 'WEEK', used: clamp(body.seven_day.utilization), resetsAt: body.seven_day.resets_at },
       ].filter(Boolean) as Limit[],
-  ))
+  ), force)
 
-const codex = () =>
+const codex = (force?: boolean) =>
   cached('Codex', () => fetchLimits(
     'Codex',
     async () => {
@@ -115,10 +141,10 @@ const codex = () =>
           used: clamp(window.used_percent),
           resetsAt: window.reset_at ? new Date(window.reset_at * 1000).toISOString() : null,
         })),
-  ))
+  ), force)
 
 export function registerLimitsIpc() {
-  ipcMain.handle('ai:limits', async () =>
-    (await Promise.all([claude(), codex()])).filter(Boolean) as ProviderLimits[],
+  ipcMain.handle('ai:limits', async (_event, force?: unknown) =>
+    (await Promise.all([claude(force === true), codex(force === true)])).filter(Boolean) as ProviderLimits[],
   )
 }

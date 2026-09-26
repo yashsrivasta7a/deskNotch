@@ -6,12 +6,14 @@ import { usePhoto } from '../../hooks/usePhoto'
 import type { ProviderLimits } from '../../hooks/useAiLimits'
 import { limitChoices, visibleLimits } from './AiOrbs'
 import { cardCount, MAX_CARDS } from '../../lib/glance'
-import { COMPANION_SAYS, COMPANION_SLEEPS, type CompanionSays, type CompanionSleeps } from './CompanionTile'
+import type { DockSide } from '../notch/ViewSwitcher'
+import type { DeskApps } from './AppsRow'
+import { COMPANION_MODES, COMPANION_SLEEPS, type CompanionMode, type CompanionSleeps } from './CompanionTile'
 
 const spring = { type: 'spring' as const, stiffness: 420, damping: 34 }
 
 /** The page's content height; the notch's Settings size follows it. */
-export const SETTINGS_PANE = 312
+export const SETTINGS_PANE = 360
 
 export type NotchStyle = 'glass' | 'translucent' | 'black'
 
@@ -29,9 +31,22 @@ export interface Settings {
   albumTint: boolean
   startOnBoot: boolean
   notchStyle: NotchStyle
+  /** Where the dock of views and controls sits around the notch. */
+  dockSide: DockSide
+  /** What the closed notch shows on its right. */
+  collapsedRight: 'time' | 'ai'
+  /** Open the notch on each new screenshot. */
+  catchScreenshots: boolean
+  /** The apps bar under the notch: Windows' most used, your favourites, or none. */
+  deskApps: DeskApps
+  /** Favourite apps, by AppUserModelID, in the order they were added. */
+  favoriteApps: string[]
+  /** The views the apps bar floats under: 'glance', 'desk', 'files' (the Shelf). */
+  appsOn: string[]
   avatar: Avatar
   /** What the companion talks about; empty means everything. */
-  companionSays: CompanionSays[]
+  /** What the companion is for: one mode at a time. */
+  companionMode: CompanionMode
   /** When the companion sleeps. */
   companionSleeps: CompanionSleeps
   /** How long a focus session runs, in minutes. */
@@ -45,14 +60,20 @@ export const DEFAULT_SETTINGS: Settings = {
   showMusic: true,
   showTasks: true,
   showAvatar: true,
-  showFocus: true,
+  showFocus: false,
   showAiUsage: true,
   ambientVideo: true,
   albumTint: true,
   startOnBoot: false,
   notchStyle: 'glass',
+  dockSide: 'bottom',
+  collapsedRight: 'time',
+  catchScreenshots: true,
+  deskApps: 'most',
+  favoriteApps: [],
+  appsOn: ['files'],
   avatar: 'ghost',
-  companionSays: [],
+  companionMode: 'focus',
   companionSleeps: 'time',
   focusMinutes: 25,
   hiddenLimits: [],
@@ -169,7 +190,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
         {show('Companion', 'showAvatar')}
         {show('Now playing', 'showMusic')}
         {show('Next task', 'showTasks')}
-        {show('Focus', 'showFocus')}
+        {/* Focus is the companion's Focus mode now, not a card of its own. */}
         {show('AI usage', 'showAiUsage')}
         {settings.showAiUsage && limitChoices(aiLimits).length > 0 && (
           // Which limits: chips rather than switches, a set to pick from.
@@ -204,6 +225,102 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             })}
           </div>
         )}
+
+        <div className="mt-4">
+          <Label>Closed notch</Label>
+          <div className="flex gap-1">
+            {(
+              [
+                { id: 'time', label: 'Time' },
+                { id: 'ai', label: 'AI usage' },
+              ] as const
+            ).map((option) => {
+              const on = (settings.collapsedRight ?? 'time') === option.id
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    set('collapsedRight', option.id)
+                  }}
+                  className={`h-[20px] rounded-full px-2 text-[10px] font-medium transition-colors ${
+                    on ? 'bg-white/[0.14] text-white' : 'bg-white/[0.04] text-white/35 hover:text-white/70'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="mt-3">
+            <Toggle label="Catch screenshots" checked={settings.catchScreenshots ?? true} onChange={(value) => set('catchScreenshots', value)} />
+          </div>
+          <div className="mt-3">
+            <Label>Apps</Label>
+            <div className="flex gap-1">
+              {(
+                [
+                  { id: 'most', label: 'Most used' },
+                  { id: 'favorites', label: 'Favourites' },
+                  { id: 'off', label: 'Off' },
+                ] as const
+              ).map((option) => {
+                const on = (settings.deskApps ?? 'most') === option.id
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      set('deskApps', option.id)
+                    }}
+                    className={`h-[20px] rounded-full px-2 text-[10px] font-medium transition-colors ${
+                      on ? 'bg-white/[0.14] text-white' : 'bg-white/[0.04] text-white/35 hover:text-white/70'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            {(settings.deskApps ?? 'most') !== 'off' && (
+              // Which views the bar floats under; at least one stays on.
+              <div className="mt-1.5 flex items-center gap-1">
+                <span className="mr-0.5 text-[10px] text-white/30">On</span>
+                {(
+                  [
+                    { id: 'glance', label: 'Glance' },
+                    { id: 'desk', label: 'Desk' },
+                    { id: 'files', label: 'Shelf' },
+                  ] as const
+                ).map((option) => {
+                  const list = settings.appsOn ?? ['files']
+                  const on = list.includes(option.id)
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        const next = on ? list.filter((v) => v !== option.id) : [...list, option.id]
+                        if (next.length) set('appsOn', next)
+                      }}
+                      className={`h-[20px] rounded-full px-2 text-[10px] font-medium transition-colors ${
+                        on ? 'bg-white/[0.14] text-white' : 'bg-white/[0.04] text-white/35 hover:text-white/70'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col" onClick={(event) => event.stopPropagation()}>
@@ -215,7 +332,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             </AvatarChoice>
           ))}
           <AvatarChoice
-            label={photo ? 'Your photo — click again to change it' : 'Use your own photo'}
+            label={photo ? 'Your photo. Click again to change it' : 'Use your own photo'}
             selected={settings.avatar === 'photo'}
             onClick={async () => {
               // First pick, or a second click on the chosen photo, asks for a file.
@@ -233,36 +350,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
           </AvatarChoice>
         </div>
 
-        <Label hint="pick any">Says</Label>
-        <div className="mb-3 flex gap-1">
-          {/* Any mix: nothing chosen means all of them. */}
-          {(() => {
-            const says = Array.isArray(settings.companionSays) ? settings.companionSays : []
-            const chip = (on: boolean, label: string, onClick: () => void) => (
+        <Label>Mode</Label>
+        <div className="mb-3 grid grid-cols-4 rounded-[10px] bg-white/[0.06] p-[3px]">
+          {COMPANION_MODES.map((option) => {
+            const on = settings.companionMode === option.id
+            return (
               <button
-                key={label}
+                key={option.id}
                 type="button"
                 aria-pressed={on}
                 onClick={(event) => {
                   event.stopPropagation()
-                  onClick()
+                  set('companionMode', option.id)
                 }}
-                className={`h-[20px] rounded-full px-2 text-[10px] font-medium transition-colors ${
-                  on ? 'bg-white/[0.14] text-white' : 'bg-white/[0.04] text-white/35 hover:text-white/70'
-                }`}
+                className="relative h-[24px] text-[11px] font-medium"
               >
-                {label}
+                {on && <motion.span layoutId="companion-mode" transition={spring} className="absolute inset-0 rounded-[7px] bg-white/[0.14]" />}
+                <span className={`relative ${on ? 'text-white' : 'text-white/45'}`}>{option.label}</span>
               </button>
             )
-            return [
-              chip(says.length === 0, 'Everything', () => set('companionSays', [])),
-              ...COMPANION_SAYS.map((option) =>
-                chip(says.includes(option.id), option.label, () =>
-                  set('companionSays', says.includes(option.id) ? says.filter((id) => id !== option.id) : [...says, option.id]),
-                ),
-              ),
-            ]
-          })()}
+          })}
         </div>
 
         <Label>Sleeps</Label>
@@ -314,6 +421,35 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
               </span>
             </button>
           ))}
+        </div>
+
+        <Label>Controls</Label>
+        <div className="mb-3 flex gap-1">
+          {(
+            [
+              { id: 'left', label: 'Left' },
+              { id: 'bottom', label: 'Bottom' },
+              { id: 'right', label: 'Right' },
+            ] as const
+          ).map((option) => {
+            const on = (settings.dockSide ?? 'bottom') === option.id
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={on}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  set('dockSide', option.id)
+                }}
+                className={`h-[20px] rounded-full px-2 text-[10px] font-medium transition-colors ${
+                  on ? 'bg-white/[0.14] text-white' : 'bg-white/[0.04] text-white/35 hover:text-white/70'
+                }`}
+              >
+                {option.label}
+              </button>
+            )
+          })}
         </div>
 
         <Toggle label="Ambient glow with music" checked={settings.ambientVideo} onChange={(value) => set('ambientVideo', value)} />

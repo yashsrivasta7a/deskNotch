@@ -4,10 +4,12 @@ import serve from 'electron-serve'
 import { startSmtc, stopSmtc } from './smtc'
 import { registerIpc } from './ipc'
 import { stopMediaIpc } from './ipc/media'
+import { stopPrivacyIpc } from './ipc/privacy'
+import { startScreenshotWatch, stopScreenshotWatch } from './ipc/screenshots'
 
 const isProd = process.env.NODE_ENV === 'production'
 
-const STRIP_HEIGHT = 400
+const STRIP_HEIGHT = 500
 
 if (isProd) {
   serve({ directory: 'app' })
@@ -49,8 +51,11 @@ app.whenReady().then(async () => {
   // anything but the notch itself. The renderer reports the notch's bounds and
   // the cursor is polled against them: setIgnoreMouseEvents(false) would hand
   // the entire strip clicks, swallowing anything the user aimed at underneath.
-  let notchBounds: { x: number; y: number; width: number; height: number } | null = null
+  // The notch, and the rail beside it while open: every rectangle that takes clicks.
+  type Rect = { x: number; y: number; width: number; height: number }
+  let notchBounds: Rect[] = []
   let interactive = false
+  let lastCursor = ''
 
   const applyCursorHitTest = () => {
     if (mainWindow.isDestroyed()) return
@@ -58,12 +63,22 @@ app.whenReady().then(async () => {
     const { x, y } = screen.getCursorScreenPoint()
     const windowBounds = mainWindow.getBounds()
 
-    const inside =
-      notchBounds !== null &&
-      x >= windowBounds.x + notchBounds.x &&
-      x <= windowBounds.x + notchBounds.x + notchBounds.width &&
-      y >= windowBounds.y + notchBounds.y &&
-      y <= windowBounds.y + notchBounds.y + notchBounds.height
+    const inside = notchBounds.some(
+      (r) =>
+        x >= windowBounds.x + r.x &&
+        x <= windowBounds.x + r.x + r.width &&
+        y >= windowBounds.y + r.y &&
+        y <= windowBounds.y + r.y + r.height,
+    )
+
+    // Where the pointer is, relative to the strip, whenever it moves: the
+    // notch decides whether a pointer that left it has really gone. DOM events
+    // cannot tell it, since the window stops taking the mouse past the edge.
+    const at = `${x - windowBounds.x},${y - windowBounds.y}`
+    if (at !== lastCursor) {
+      lastCursor = at
+      mainWindow.webContents.send('notch:cursor', { x: x - windowBounds.x, y: y - windowBounds.y })
+    }
 
     if (inside === interactive) return
     interactive = inside
@@ -75,8 +90,8 @@ app.whenReady().then(async () => {
   const hitTestTimer = setInterval(applyCursorHitTest, 60)
   mainWindow.on('closed', () => clearInterval(hitTestTimer))
 
-  ipcMain.on('notch:bounds', (_event, bounds: typeof notchBounds) => {
-    notchBounds = bounds
+  ipcMain.on('notch:bounds', (_event, bounds: Rect[] | Rect) => {
+    notchBounds = Array.isArray(bounds) ? bounds : [bounds]
   })
 
   // Only take keyboard focus when the notch is pinned open, so merely hovering
@@ -100,10 +115,13 @@ app.whenReady().then(async () => {
 
   registerIpc()
   startSmtc(mainWindow)
+  startScreenshotWatch()
 })
 
 app.on('window-all-closed', () => {
   stopSmtc()
   stopMediaIpc()
+  stopPrivacyIpc()
+  stopScreenshotWatch()
   app.quit()
 })
