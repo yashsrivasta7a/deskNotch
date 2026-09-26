@@ -172,7 +172,7 @@ The rule it follows: **nothing slow or blocking runs on main's event loop**, bec
 | Problem | Chosen | Rejected, and why |
 |---|---|---|
 | Smooth notch animation | One full-width transparent window; the notch is a `<div>` animated with springs | Resizing the `BrowserWindow`: `setBounds` steps on the compositor's schedule, cannot ease, and tears on transparent windows |
-| Clicks through the empty window | Permanently click-through (`forward: true`), plus a 60 ms cursor poll against rectangles the page reports | Toggling on hover: `setIgnoreMouseEvents(false)` hands the **whole** strip the mouse, swallowing clicks meant for apps underneath. Shaped windows: not supported for transparent Electron windows |
+| Clicks through the empty window | Permanently click-through (`forward: true`), plus a 60 ms cursor poll against rectangles the page reports | Toggling on hover: `setIgnoreMouseEvents(false)` hands the **whole** strip the mouse, swallowing clicks meant for apps underneath. `setShape`: exists, but the shape would have to be re-sent on every frame of the spring animation |
 | When to close the notch | Close only when the **real** cursor (from main) is 48 px away and still moving away | DOM `mouseleave`: fires falsely when a view shrinks under a still pointer, and when the window turns click-through at its edge; Chromium also sends synthetic moves during layout |
 | Reading media | `SMTC` in a worker thread, change events as a trigger to re-read the whole session | On main: the library blocks its thread. Stitching partial events: every event carries a different subset, so ordering bugs are guaranteed |
 | Controlling media | The system media keys via `keybd_event` | SMTC control calls: the library only observes. Per-player APIs: one integration per app |
@@ -200,7 +200,7 @@ The rule it follows: **nothing slow or blocking runs on main's event loop**, bec
 | PowerShell is blocked or slow | The dots, moments and app icons are missing; everything else works |
 | SMTC has no session | The media card disappears; the bar shows the time |
 | An AI provider is down or rate-limiting | The last reading stays; with none, a retry card |
-| The Screenshots folder does not exist | No catcher; a warning in the main log |
+| The Screenshots folder does not exist | No catcher; the folder is skipped silently |
 | An app in the favourites is uninstalled | It drops out of the row on the next lookup |
 
 ---
