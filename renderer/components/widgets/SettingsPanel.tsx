@@ -15,7 +15,7 @@ const spring = { type: 'spring' as const, stiffness: 420, damping: 34 }
 /** The page's content height; the notch's Settings size follows it. */
 export const SETTINGS_PANE = 312
 
-/** Black, the Dynamic Island; Mica, the blurred wallpaper; Glass, a live blur of what is behind. */
+/** Default, a soft charcoal notch; Mica, the blurred wallpaper; Glass, a live blur of what is behind. */
 export type NotchStyle = 'black' | 'mica' | 'glass'
 
 /** A bot, or the user's own photo. */
@@ -471,7 +471,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
                 ? 'A live blur of what is behind it. The notch is hidden from screenshots and screen sharing while on'
                 : settings.notchStyle === 'mica'
                   ? 'Your wallpaper, blurred, like Windows 11'
-                  : 'A soft charcoal, like the Dynamic Island'
+                  : 'A soft charcoal, like a MacBook notch'
             }
           >
             <Segmented

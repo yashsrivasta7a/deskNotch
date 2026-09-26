@@ -18,7 +18,7 @@ export const CHROME_Y = BAR_OPEN + PAD_TOP + PAD
 /** How far past its edge the pointer may drift before the notch lets go. */
 const LEAVE_MARGIN = 48
 
-/** Dynamic Island spring — snappy, barely overshoots. */
+/** The notch's spring: snappy, barely overshoots. */
 const spring = { type: 'spring' as const, stiffness: 400, damping: 30 }
 
 /**

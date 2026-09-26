@@ -1,48 +1,81 @@
 # deskNotch
 
-A notch for Windows, after Apple's Dynamic Island. It sits at the top centre of the screen as a small black bar, and opens on hover into a few quiet views: what is playing, a companion that keeps your focus timer and tasks, AI plan limits, a shelf for files, and the apps you use most.
+**The MacBook notch, reimagined for Windows.**
 
-- **App ID**: `com.devezio.desknotch`
-- **Product Name**: `deskNotch`
-- **Copyright**: Copyright © 2026 Devezio.tech
+deskNotch sits at the top centre of your screen as a slim bar. Hover it, and it opens into your music, a focus timer with a small companion, your tasks, a shelf for files, your AI usage and the apps you use most. Move away, and it folds back out of your way.
 
-## What it does
+> **Beta.** deskNotch is in public testing. Things may break; [feedback](#feedback) is very welcome.
 
-**Closed**, the bar shows one thing at a time: the album art while music plays, the focus countdown while a session runs, or the time (12-hour). On the right, the time or your AI limits as two rings, and privacy dots while an app uses the microphone (orange) or camera (green). When something connects (headphones, a Wi-Fi network, a Bluetooth device) it gets a brief moment of its own.
+---
 
-**Open**, it has three views, switched from a small dock beside or under the notch:
+## Highlights
 
-- **Glance**: a row of up to four cards. The companion (a bot, or your photo) in one mode at a time: Focus, Tasks, Time or AI. Now playing, with controls. Next task. AI limits for Claude and Codex.
-- **Desk**: the companion's focus timer beside the whole task list.
-- **Shelf**: drop files on it (even on the closed notch), drag them back out wherever they are needed.
+### A notch that is always useful, even closed
+- **Now playing**: album art and a live pulse while anything plays, from Spotify to a YouTube tab.
+- **Focus countdown**: a tiny ring and the time left while a session runs.
+- **Clock**: 12-hour time whenever nothing else needs the space.
+- **AI usage**: your Claude and Codex limits as two small rings, 5-hour inside and weekly outside.
+- **Privacy dots**: orange while any app uses the microphone, green for the camera.
+- **Just connected**: headphones, Wi-Fi and Bluetooth devices get a brief moment of their own when they connect.
 
-**Moments**: the notch opens by itself, briefly, for a screenshot just taken (drag it anywhere, keep it, open it, or discard it) and for a finished focus session.
+### Three views, one hover away
+- **Glance**: up to four cards: your companion, now playing with controls, your next tasks, and AI usage.
+- **Desk**: a focus timer beside your whole task list.
+- **Shelf**: drop files anywhere on the notch to park them, with thumbnails; drag them back out one at a time, or all at once.
 
-**Apps bar**: Windows' own most-used apps, or your favourites, in a small tray beside or under the notch on the views you choose; four in view (two beside it), the rest a scroll away.
+### A companion with a job
+- **One mode at a time**: Focus, Tasks, Time or AI, each with its own look and body language.
+- **Focus timer**: 1 to 60 minutes, or any custom length down to the second.
+- **Tasks**: tick the next one from the notch, or open the whole list.
+- **It reacts**: watches what it is working on, celebrates a finished task, and sleeps at night.
 
-Everything is a setting: what the glance shows, the companion and its mode, where the dock sits, the style (Default, a soft charcoal; Mica, your wallpaper frosted; Glass, a live blur of whatever is behind it), which tabs the dock shows, the closed bar's right side, the apps bar, screenshots, start on boot.
+### Moments that come to you
+- **Screenshot catcher**: take a screenshot and the notch opens on it: drag it into any app, keep it on the Shelf, open it, or discard it.
+- **Focus complete**: when a session ends, the notch opens and your companion tells you.
 
-## Requirements
+### Your apps, your way
+- **Apps bar**: Windows' own most-used apps, or your favourites, one tap to open. Four in view, the rest a scroll away.
 
-- Windows 10 or 11 (it reads Windows' media, registry and shell directly; nothing here runs on macOS or Linux)
-- Node.js 20+
+### Looks that fit your desktop
+- **Three styles**: Default (a soft charcoal), Mica (your wallpaper, frosted) and Glass (a live blur of whatever is behind it).
+- **Your layout**: put the tabs dock and the apps bar left, right or below the notch; hide the tabs you don't use.
+- **Settings that read like System Settings**: one section at a time, every option explained in a line.
 
-## Getting started
+---
+
+## Install
+
+1. Download the latest `deskNotch Setup.exe` from [**Releases**](https://github.com/yashsrivasta7a/deskNotch/releases).
+2. Run it. The beta is not code-signed yet, so Windows may show **"Windows protected your PC"**: click **More info**, then **Run anyway**.
+3. A slim bar appears at the top centre of your screen. Hover it to open; Settings is the sliders icon on the dock.
+
+**Requires** Windows 10 or 11.
+
+## Build from source
+
+Requires Node.js 20+.
 
 ```bash
 npm install     # install dependencies
-npm run dev     # run in development, with hot reload for the notch
-npm run build   # production build
+npm run dev     # run in development, with hot reload
+npm run build   # build the Windows installer into dist/
 ```
-
-## Docs
-
-| File | What is in it |
-|---|---|
-| [Functionality.md](Functionality.md) | Every feature, built or planned, with its status |
-| [HowItWorks.md](HowItWorks.md) | Every place deskNotch talks to Windows, with diagrams (Mermaid; in VS Code install **Markdown Preview Mermaid Support**) |
-| [deskNotch.md](deskNotch.md) | Design notes: why the notch is drawn inside a full-width window, hit testing, the IPC bridge, where code lives |
 
 ## Privacy
 
-Everything stays on the machine. The AI limits are read with the logins Claude Code and Codex already keep in your user folder, and those tokens go only to their own providers (Anthropic, OpenAI). Media, the microphone and camera state, Wi-Fi, Bluetooth and app usage are read from Windows locally and never leave it.
+Everything stays on your PC. Media, microphone and camera state, Wi-Fi, Bluetooth, screenshots and app usage are read from Windows locally and never leave it. AI usage is read with the logins Claude Code and Codex already keep on your machine, and those tokens are sent only to their own providers (Anthropic and OpenAI).
+
+## Known limits (beta)
+
+- **Start with Windows** is not available yet.
+- **Glass** hides the notch from screenshots and screen sharing while it is on; that is how Windows lets an app capture what is behind it.
+- **Screenshots** are caught when Snipping Tool saves them, which is its default.
+- **AI usage** appears only if you use Claude Code or Codex on the same PC.
+
+## Feedback
+
+Found a bug or have an idea? [Open an issue](https://github.com/yashsrivasta7a/deskNotch/issues) with what you did, what happened, and a screenshot if something looked off.
+
+---
+
+Copyright © 2026 Devezio.tech · App ID `com.devezio.desknotch`

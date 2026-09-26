@@ -5,7 +5,7 @@ import { Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 /** Filled, not stroked: at this size a stroked play triangle reads as a wire. */
 const glyph = { fill: 'currentColor', strokeWidth: 0 } as const
 
-/** Dynamic Island spring. Snappy enough to feel physical, damped enough not to wobble. */
+/** The notch's spring. Snappy enough to feel physical, damped enough not to wobble. */
 const spring = { type: 'spring' as const, stiffness: 400, damping: 30 }
 
 interface ControlButtonProps {
