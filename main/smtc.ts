@@ -60,7 +60,7 @@ const request = (type: string, args?: unknown[]): Promise<unknown> => {
 export function startSmtc(window: BrowserWindow) {
   // Resolves to app/ at runtime, where the worker is copied alongside main.js.
   // import.meta.dirname rather than __dirname: the bundle is an ES module.
-  worker = new Worker(path.join(import.meta.dirname, 'smtc-worker.ts'))
+  worker = new Worker(path.join(import.meta.dirname, 'smtc-worker.js'))
 
   const push = () => {
     if (window.isDestroyed()) return

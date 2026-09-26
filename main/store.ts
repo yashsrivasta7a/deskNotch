@@ -15,9 +15,15 @@ export interface StoreShape {
   /** The user's chosen photo, held as a data URL so the renderer can show it
    *  without filesystem access and it survives the original file moving. */
   photo: string | null
+  /** File paths pinned to the shelf (dropped or saved captures). */
+  shelf: string[]
+  /** File paths the user has explicitly pinned in the desk. */
+  pins: string[]
+  /** Completed focus-timer sessions, kept for up to 90 days. */
+  focusLog: unknown[]
 }
 
-const defaults: StoreShape = { todos: [], settings: {}, photo: null }
+const defaults: StoreShape = { todos: [], settings: {}, photo: null, shelf: [], pins: [], focusLog: [] }
 
 let cache: StoreShape | null = null
 
