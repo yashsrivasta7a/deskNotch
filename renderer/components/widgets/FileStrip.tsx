@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDownToLine, File as FileIcon, Folder, Trash2, X } from 'lucide-react'
+import { ArrowDownToLine, File as FileIcon, Files, Folder, Trash2, X } from 'lucide-react'
 import { CHROME_X } from '../notch/NotchChassis'
 import { dragFile, droppedPaths, openFile, revealFile, useFileList, /* useRecentFiles, */ type FileItem } from '../../hooks/useFiles'
 
@@ -33,13 +33,23 @@ const middle = (name: string, max = 13) => {
  * it in its folder, and dragging it out moves it — dropped somewhere else, it
  * leaves the shelf.
  */
-const Chip: React.FC<{ item: FileItem; onRemove?: () => void; onDraggedOut?: () => void }> = ({ item, onRemove, onDraggedOut }) => (
+/** Where a chip flies to while "drag all" gathers the shelf into one stack. */
+type Gather = { x: number; y: number; i: number }
+
+const Chip: React.FC<{ item: FileItem; gather?: Gather; onRemove?: () => void; onDraggedOut?: () => void }> = ({ item, gather, onRemove, onDraggedOut }) => (
   <motion.div
     layout
+    data-chip={item.path}
     initial={{ opacity: 0, scale: 0.6, y: 10 }}
-    animate={{ opacity: 1, scale: 1, y: 0 }}
+    animate={
+      gather
+        ? // Gathered: into a small, slightly fanned stack at the handle.
+          { x: gather.x, y: gather.y, scale: 0.5, rotate: ((gather.i % 3) - 1) * 7, opacity: 0.95 }
+        : { x: 0, opacity: 1, scale: 1, y: 0, rotate: 0 }
+    }
     exit={{ opacity: 0, scale: 0.6, y: -8 }}
-    transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+    transition={{ type: 'spring', stiffness: 420, damping: 26, delay: gather ? gather.i * 0.025 : 0 }}
+    style={{ zIndex: gather ? 10 + gather.i : undefined }}
     draggable
     onDragStart={(event) => {
       // The OS does the dragging, so the file lands wherever it is dropped.
@@ -128,6 +138,32 @@ export const FileStrip: React.FC<{ accent: string; dragging: boolean; onCount?: 
   // const pins = useFileList('pins')
   // const recent = useRecentFiles(tab === 'recent')
   const row = useRef<HTMLDivElement>(null)
+  const handle = useRef<HTMLDivElement>(null)
+  /** While dragging everything out: where each chip has flown to. */
+  const [gathered, setGathered] = useState<Record<string, Gather> | null>(null)
+
+  /** Drag all: the files fly into a stack at the handle, and the whole stack
+   *  goes out as one drag. Dropped elsewhere, they leave the shelf; dropped
+   *  back on the notch, they spring back into place. */
+  const dragAll = (event: React.DragEvent) => {
+    event.preventDefault()
+    const target = handle.current?.getBoundingClientRect()
+    if (!target || !row.current) return
+    const tx = target.left + target.width / 2
+    const ty = target.top + target.height / 2
+    const next: Record<string, Gather> = {}
+    row.current.querySelectorAll<HTMLElement>('[data-chip]').forEach((el, i) => {
+      const r = el.getBoundingClientRect()
+      // Aim the thumbnail (the chip's top part) at the handle's centre.
+      next[el.dataset.chip!] = { x: tx - (r.left + r.width / 2), y: ty - (r.top + 26), i }
+    })
+    setGathered(next)
+    const paths = items.map((item) => item.path)
+    void dragFile(paths, (event.target as HTMLElement).closest('main')).then((out) => {
+      if (out) shelf.clear()
+      setGathered(null)
+    })
+  }
 
   const items = shelf.items
   useEffect(() => onCount?.(items.length), [items.length, onCount])
@@ -186,7 +222,13 @@ export const FileStrip: React.FC<{ accent: string; dragging: boolean; onCount?: 
       >
         <AnimatePresence initial={false} mode="popLayout">
           {items.map((item) => (
-            <Chip key={item.path} item={item} onRemove={() => shelf.remove(item.path)} onDraggedOut={() => shelf.remove(item.path)} />
+            <Chip
+              key={item.path}
+              item={item}
+              gather={gathered?.[item.path]}
+              onRemove={() => shelf.remove(item.path)}
+              onDraggedOut={() => shelf.remove(item.path)}
+            />
           ))}
         </AnimatePresence>
 
@@ -208,28 +250,47 @@ export const FileStrip: React.FC<{ accent: string; dragging: boolean; onCount?: 
         )}
       </div>
 
+      {/* Beside the row, not in it, so they stay put however far the files
+          scroll: Clear all, and under it the handle that drags everything. */}
       <AnimatePresence initial={false}>
-        {/* Clear all: beside the row, not in it, so it stays at the right
-            however far the files scroll. Faint until the pointer is on the shelf. */}
         {items.length > 1 && (
-          <motion.button
-            key="clear"
+          <motion.div
+            key="controls"
             layout
-            type="button"
-            aria-label="Clear the shelf"
-            title="Clear all"
             initial={{ opacity: 0, scale: 0.6 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.6 }}
             transition={spring}
-            onClick={(event) => {
-              stop(event)
-              shelf.clear()
-            }}
-            className="mb-5 ml-2 grid h-[28px] w-[28px] shrink-0 place-items-center rounded-full bg-white/[0.06] text-white/35 transition-[color,background] duration-150 hover:bg-white/[0.12] hover:text-white group-hover/shelf:text-white/70"
+            className="ml-2 flex shrink-0 flex-col items-center gap-1.5"
           >
-            <Trash2 size={12} strokeWidth={2.2} />
-          </motion.button>
+            <button
+              type="button"
+              aria-label="Clear the shelf"
+              title="Clear all"
+              onClick={(event) => {
+                stop(event)
+                shelf.clear()
+              }}
+              className="grid h-[28px] w-[28px] place-items-center rounded-full bg-white/[0.06] text-white/35 transition-[color,background] duration-150 hover:bg-white/[0.12] hover:text-white group-hover/shelf:text-white/70"
+            >
+              <Trash2 size={12} strokeWidth={2.2} />
+            </button>
+            {/* Not a button: a thing to pick up. Grab it and every file comes along. */}
+            <div
+              ref={handle}
+              draggable
+              onDragStart={dragAll}
+              title={`Drag all ${items.length} files anywhere`}
+              aria-label={`Drag all ${items.length} files`}
+              className="relative grid h-[28px] w-[28px] cursor-grab place-items-center rounded-full text-black shadow-[0_4px_12px_-4px_rgba(0,0,0,0.8)] transition-transform duration-150 hover:scale-110 active:cursor-grabbing"
+              style={{ background: accent }}
+            >
+              <Files size={13} strokeWidth={2.3} />
+              <span className="absolute -right-1 -top-1 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-white px-[3px] text-[8.5px] font-bold tabular-nums text-black">
+                {items.length}
+              </span>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
