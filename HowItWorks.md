@@ -2,7 +2,7 @@
 
 This file explains every place deskNotch reaches outside itself into Windows: reading what music is playing, noticing a screenshot, seeing that the microphone is on, and so on. Settings and tasks are left out; they are just a JSON file on disk.
 
-**New to Electron?** Read *Start here* first. It explains, from zero, the ideas every section below relies on. Each numbered section then opens with a short **In plain words** summary before the details, so you can read just those on a first pass.
+**New to Electron?** Read *Start here* first. **Already know it?** Skip to *For engineers*: the architecture, the cost of every background task, the security model, and every design decision with the alternative it beat. It explains, from zero, the ideas every section below relies on. Each numbered section then opens with a short **In plain words** summary before the details, so you can read just those on a first pass.
 
 > The diagrams are [Mermaid](https://mermaid.js.org/). GitHub draws them as they are; VS Code-based editors need the **Markdown Preview Mermaid Support** extension (`bierner.markdown-mermaid`), otherwise they show as code.
 
@@ -104,6 +104,104 @@ It would be simpler to hand the page Node.js directly. It is not done because th
 | **Shell `AppsFolder` + `IShellItemImageFactory`** | The Start menu's own list of apps, and the shell's icon renderer. | App names, icons, launching (§8) |
 
 Every diagram below uses the same lanes: **Renderer** (the page), **Main** (the kitchen), and **Windows**.
+
+---
+
+## For engineers: architecture, costs, and why it is built this way
+
+*Start here* is the concept; this is the engineering. Every number below is the one in the code.
+
+### Process architecture
+
+```mermaid
+flowchart LR
+    subgraph R["Renderer (sandboxed Chromium)"]
+        UI["React notch<br/>renderer/"]
+    end
+    P["preload.ts<br/>contextBridge → window.bridge"]
+    subgraph M["Main process (Node, Electron)"]
+        IPC["ipcMain handlers<br/>main/ipc/*.ts"]
+        HT["Hit test + cursor feed<br/>setInterval 60 ms"]
+        W["Worker thread<br/>smtc-worker.ts"]
+    end
+    subgraph C["Child processes"]
+        K["PowerShell (long-lived)<br/>media keys: keybd_event"]
+        S["PowerShell (long-lived)<br/>status watcher"]
+        O["PowerShell (one-shot)<br/>app names + icons, raise window"]
+        T["reg.exe, netsh"]
+    end
+    WIN[("Windows<br/>SMTC · registry · shell · FS")]
+
+    UI <-->|"invoke / send / on"| P
+    P <--> IPC
+    IPC --> W
+    W <-->|"SMTC library, blocking"| WIN
+    IPC --> K & O & T
+    S -->|"stdout: a line per change"| IPC
+    K & O & T & S --> WIN
+    HT -->|"setIgnoreMouseEvents"| WIN
+```
+
+The rule it follows: **nothing slow or blocking runs on main's event loop**, because main also owns the window and relays every IPC message; a stall there freezes the notch. Blocking work goes to the worker thread (SMTC) or to a child process (everything PowerShell).
+
+### Cost budget, idle and active
+
+| Work | How often | Cost | Where |
+|---|---|---|---|
+| Cursor hit test | every 60 ms, always | one `getCursorScreenPoint` and a rectangle check; IPC only when the cursor moved | [main.ts](main/main.ts) |
+| Now playing | event-driven (SMTC pushes) | one session read per change | worker thread |
+| Media key | per click | a line to an already-running PowerShell (no 300 ms start-up) | [media.ts](main/ipc/media.ts) |
+| Privacy dots | 1.5 s | a registry walk inside one long-lived PowerShell; silent unless changed | [privacy.ts](main/ipc/privacy.ts) |
+| Wi-Fi | ~10.5 s (every 7th tick) | one `netsh` call, ~0.2 s | same process |
+| Bluetooth | ~30 s (every 20th tick) | a batched PnP property query, ~1 to 2 s, since each device is asked | same process |
+| Screenshots | event-driven | `fs.watch` (ReadDirectoryChangesW); zero cost when idle | [screenshots.ts](main/ipc/screenshots.ts) |
+| Headphones | event-driven | Chromium's `devicechange`; nothing of ours runs | [useHeadphones.ts](renderer/hooks/useHeadphones.ts) |
+| AI limits | every 2 min while shown, min gap 60 s | one HTTPS call per provider; 5 min back-off after a failure | [limits.ts](main/ipc/limits.ts) |
+| Most used apps | once per 30 min | `reg query` + one PowerShell with a C# icon helper, ~2 to 4 s cold, then cached | [apps.ts](main/ipc/apps.ts) |
+
+### Security model
+
+- **The renderer is untrusted by design.** The window keeps Electron's defaults (context isolation on, Node integration off, sandbox on). The page gets four functions through `contextBridge`, never `ipcRenderer` or Node.
+- **Every handler validates its input.** Paths must be absolute strings before they reach `shell` ([files.ts](main/ipc/files.ts)). **Discard** only accepts an image directly inside a Screenshots folder, then goes to the Recycle Bin, not `unlink` ([screenshots.ts](main/ipc/screenshots.ts)). **Launch** only accepts an app id that main itself listed (most used, or installed), never an arbitrary command ([apps.ts](main/ipc/apps.ts)).
+- **No string-built shell commands from page input.** PowerShell scripts are constants; the one place data goes in (app ids for icons) is JSON, base64-encoded, and decoded inside the script, so no quoting can break out.
+- **Credentials.** The Claude and Codex OAuth tokens are read from the files those tools already keep, used only in main, sent only to their own providers, and never passed to the renderer. No refresh is attempted, because refreshing would rotate the token the tool itself uses.
+- **Focus.** The window takes keyboard focus only when pinned, so hovering never steals typing from another app.
+
+### Decisions, and what was rejected
+
+| Problem | Chosen | Rejected, and why |
+|---|---|---|
+| Smooth notch animation | One full-width transparent window; the notch is a `<div>` animated with springs | Resizing the `BrowserWindow`: `setBounds` steps on the compositor's schedule, cannot ease, and tears on transparent windows |
+| Clicks through the empty window | Permanently click-through (`forward: true`), plus a 60 ms cursor poll against rectangles the page reports | Toggling on hover: `setIgnoreMouseEvents(false)` hands the **whole** strip the mouse, swallowing clicks meant for apps underneath. Shaped windows: not supported for transparent Electron windows |
+| When to close the notch | Close only when the **real** cursor (from main) is 48 px away and still moving away | DOM `mouseleave`: fires falsely when a view shrinks under a still pointer, and when the window turns click-through at its edge; Chromium also sends synthetic moves during layout |
+| Reading media | `SMTC` in a worker thread, change events as a trigger to re-read the whole session | On main: the library blocks its thread. Stitching partial events: every event carries a different subset, so ordering bugs are guaranteed |
+| Controlling media | The system media keys via `keybd_event` | SMTC control calls: the library only observes. Per-player APIs: one integration per app |
+| Screenshots | Watch the folder Snipping Tool saves to | Clipboard polling: reads a full bitmap every tick to detect change. Global keyboard hook: needs a native module and sees the key, not the result |
+| Mic / camera state | The ConsentStore registry, which Windows' own tray icon uses | WinRT capability APIs: need NodeRT, a native module rebuilt per Electron version. No official API exists for "in use" |
+| Most used apps | UserAssist, ranked by focus time | Running-process lists: show what is open, not what you use. Prefetch or event logs: need admin |
+| App icons | `IShellItemImageFactory` via a small C# helper compiled in PowerShell | `app.getFileIcon`: needs an `.exe`, and most apps now are Store packages with none. Parsing each package's manifest for its logo: many formats, scale variants, fragile |
+| Bluetooth | A slow, batched query every ~30 s, plus Chromium's instant `devicechange` for audio | Per-device queries (~9 s measured). WinRT `BluetoothDevice` watchers: native module again |
+| Native code in general | None: Electron APIs, Node, PowerShell, stock CLI tools | NodeRT / N-API addons: every Electron upgrade needs a rebuild, and a crash in native code takes main down with it |
+
+### Things that are subtle
+
+- **`startDrag` is modal on Windows.** It runs the OS drag loop and returns only when the drop happens. Main times the call; if it blocked for over 120 ms, a real drag happened, and the cursor position at that moment says where it ended, so the Shelf knows whether the file left ([files.ts:140](main/ipc/files.ts#L140)).
+- **The icon bitmap needs fixing.** `GetImage` returns a DIB section that is bottom-up and premultiplied-alpha. The helper wraps it as `Format32bppPArgb`, copies it, and flips it when the height is positive; otherwise icons come out upside down with black edges.
+- **UserAssist names are ROT13** and its values are 72-byte blobs: launch count at bytes 4 to 7, focus time in ms at 12 to 15. Entries starting with `{` are known-folder GUID paths and are skipped.
+- **ConsentStore semantics:** "in use" is `LastUsedTimeStop == 0` with a non-zero start. Apps that open the device outside Windows' permission broker never appear; it is best-effort by nature.
+- **A screenshot file is written in several passes.** The watcher only fires once the size is stable across two reads 150 ms apart, and ignores files older than 10 s (renames and touches fire watch events too).
+- **Rate limits.** Claude's usage endpoint is shared with Claude Code itself and returns 429 quickly. The last good reading is persisted to `userData/limits-cache.json`, so a restart shows numbers instead of "unavailable", and a failure backs off for 5 minutes unless the user presses retry.
+- **Two PowerShells never leak.** The long-lived ones are killed on quit, and the status watcher also checks every tick that our process still exists, so a crash cannot leave it orphaned.
+
+### How it fails
+
+| If this fails | What the user sees |
+|---|---|
+| PowerShell is blocked or slow | The dots, moments and app icons are missing; everything else works |
+| SMTC has no session | The media card disappears; the bar shows the time |
+| An AI provider is down or rate-limiting | The last reading stays; with none, a retry card |
+| The Screenshots folder does not exist | No catcher; a warning in the main log |
+| An app in the favourites is uninstalled | It drops out of the row on the next lookup |
 
 ---
 
