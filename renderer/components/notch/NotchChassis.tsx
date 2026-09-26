@@ -78,6 +78,37 @@ const CORNER_FILLS: Record<NotchStyle, string> = {
   glass: 'rgb(20, 20, 24)',
 }
 
+/** How far the curves at the notch's top corners reach out along the screen's edge. */
+const EAR = 8
+
+/**
+ * One of the two small curves where the notch meets the top of the screen,
+ * flaring outward so the notch reads as part of the edge, like a MacBook's.
+ * It shows the notch's own surface: the Default colour, or the same Mica or
+ * Glass backdrop, lined up with it.
+ */
+const Ear: React.FC<{ side: 'left' | 'right'; notchStyle: NotchStyle }> = ({ side, notchStyle }) => {
+  const ref = useRef<HTMLDivElement>(null)
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      className="pointer-events-none absolute top-0 isolate"
+      style={{
+        width: EAR,
+        height: EAR,
+        [side]: -EAR,
+        background: notchStyle === 'black' ? CORNER_FILLS.black : CORNER_FILLS[notchStyle],
+        // Everything but a quarter circle at the corner away from the notch:
+        // a concave curve from the screen's edge down into the notch's side.
+        maskImage: `radial-gradient(circle at ${side === 'left' ? '0' : '100%'} 100%, transparent ${EAR}px, black ${EAR + 0.5}px)`,
+      }}
+    >
+      {notchStyle !== 'black' && <Backdrop kind={notchStyle} host={ref} />}
+    </div>
+  )
+}
+
 /**
  * The notch itself, drawn inside the full-width invisible strip window.
  *
@@ -267,20 +298,9 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
       className={`relative select-none cursor-default ${className}`}
     >
 
-      <svg
-        className="absolute top-0 -left-[1px] w-[6px] h-[6px] pointer-events-none z-20 transition-colors duration-300"
-        viewBox="0 0 6 6"
-        style={{ fill: CORNER_FILLS[notchStyle] }}
-      >
-        <path d="M0,0 H6 V6 A6,6 0 0 1 0,0 Z" />
-      </svg>
-      <svg
-        className="absolute top-0 -right-[1px] w-[6px] h-[6px] pointer-events-none z-20 transition-colors duration-300"
-        viewBox="0 0 6 6"
-        style={{ fill: CORNER_FILLS[notchStyle] }}
-      >
-        <path d="M6,0 H0 V6 A6,6 0 0 0 6,0 Z" />
-      </svg>
+
+      <Ear side="left" notchStyle={notchStyle} />
+      <Ear side="right" notchStyle={notchStyle} />
 
       <motion.main
         ref={mainRef}

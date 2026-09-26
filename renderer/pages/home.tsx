@@ -244,7 +244,8 @@ export default function HomePage() {
   useEffect(() => {
     if (!settingsLoaded.current) return
     void window.bridge?.invoke('store:set', 'settings', settings)
-    void window.bridge?.invoke('settings:start-on-boot', settings.startOnBoot)
+    // Start with Windows is switched off for now (Settings shows it as coming soon).
+    void window.bridge?.invoke('settings:start-on-boot', false)
   }, [settings])
 
   catchScreenshots.current = settings.catchScreenshots ?? true

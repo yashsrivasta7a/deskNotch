@@ -497,8 +497,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
     general: (
       <>
         <Group>
-          <Row title="Start with Windows" detail="Open deskNotch when you sign in">
-            <Switch label="Start with Windows" on={settings.startOnBoot} onChange={(v) => set('startOnBoot', v)} />
+          <Row title="Start with Windows" detail="Coming soon">
+            <Switch label="Start with Windows" on={false} disabled onChange={() => {}} />
           </Row>
         </Group>
       </>

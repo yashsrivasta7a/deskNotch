@@ -35,6 +35,9 @@ app.whenReady().then(async () => {
     movable: false,
     fullscreenable: false,
     skipTaskbar: true,
+    // A tool window: Windows never lists these on the taskbar or in Alt+Tab,
+    // even after it takes focus (plain skipTaskbar can be lost then).
+    type: 'toolbar',
     alwaysOnTop: true,
     webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.js'),
@@ -100,6 +103,8 @@ app.whenReady().then(async () => {
     if (mainWindow.isDestroyed()) return
     if (isPinned) mainWindow.focus()
     else mainWindow.blur()
+    // Focus can put a window back on the taskbar; keep it off.
+    mainWindow.setSkipTaskbar(true)
   })
 
   ipcMain.on('notch:playback_session', (_event, session: any) => {
