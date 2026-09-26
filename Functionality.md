@@ -41,7 +41,7 @@ Shown when the notch opens. Room for real controls.
 - [x] **AI usage monitor**: one card per tool (Claude, Codex), each window a globe filled by % used; hover shows what is left and when it resets; settings picks which windows. A card that cannot be read becomes a retry button.
 - [x] **Screenshot catcher**: every capture Windows saves opens the closed notch on it for a few seconds, with a shutter flash: drag it anywhere, Keep it on the Shelf, Open it, or Discard it (to the Recycle Bin). A setting.
 - [x] **Focus done**: when a session ends, the notch opens on its own card: the bot says "Done!" in a speech bubble, with how long you went and Again / Done.
-- [x] **Apps bar**: a small tray under the notch with Windows' four most used apps (by time in focus), or up to four favourites picked from every installed app. Tap to open. On the views chosen in Settings (the Shelf by default).
+- [x] **Apps bar**: a tray of apps, one tap to open: Windows' most used (by time in focus, top 12) or any number of favourites picked from every installed app. Four in view under the notch, two beside it; the rest scroll. Position: Auto, Left, Bottom or Right, never the same side as the tabs dock (Auto puts it on the right when the dock is below, else under the notch). On the views chosen in Settings (the Shelf by default).
 - [~] **Calendar**: the date leads the time card. No events source yet.
 - [ ] **Volume slider**
 - [ ] **Stopwatch**
@@ -56,8 +56,10 @@ Shown when the notch opens. Room for real controls.
 All of these are settings, not hardcoded behaviour.
 
 - [x] **Views**: Glance (up to 4 cards), Desk and Shelf, plus Settings. No top bar when open: the views, settings and the lock are circles on a small dock right against the notch, on the left, right or bottom (Settings → Controls), each naming itself on hover. Every view has the same tight 12px padding. The notch closes only once the pointer is clearly away and still heading away, so a view shrinking under the cursor never closes it.
-- [x] **Shelf**: after the Mac notch shelves: drop files on it (even on the collapsed notch, which then opens and locks), they sit left to right with thumbnails inside a dashed well, the notch widens per file up to a limit and then scrolls. Drag one out and drop it elsewhere and it leaves the shelf. Clear all sits at the row's end. Recent and Pinned are built but parked (commented out).
+- [x] **Shelf**: after the Mac notch shelves: drop files anywhere on the notch (even closed, which then opens and locks; a drop on the bar, or while it is still opening, still lands), they sit left to right with thumbnails inside a dashed well, the notch widens per file up to a limit and then scrolls. Drag one out and drop it elsewhere and it leaves the shelf. Clear all sits at the row's end. Recent and Pinned are built but parked (commented out).
 - [x] **Desk**: the same companion card as the glance, always in Focus, beside the whole task list; as tall as the glance.
+- [x] **Styles**: Default (a soft charcoal), Mica (the wallpaper, blurred and darkened, lined up with the notch, like Windows 11) and Glass (a live blur of whatever is behind, open or closed). The notch, the dock and the apps tray all wear the chosen material; only the background changes, never the content's colours. Glass hides the notch from screenshots and screen sharing while it is on.
+- [x] **Hide tabs**: Glance, Desk and Shelf can each be taken off the dock; Settings and the lock always stay.
 - [x] **Pin open** — clicking the collapsed bar holds the notch open, so it does
   not close while typing or reading.
 - [x] **Click-through** — the strip only takes clicks over the notch itself;
@@ -71,7 +73,7 @@ All of these are settings, not hardcoded behaviour.
 - [x] **Startup on boot** — registers with Windows via `setLoginItemSettings`.
 - [ ] **Hide on fullscreen** — stays out of the way during video and games.
 - [ ] **Tray icon + quit** — the app is frameless, so this is the only way out.
-- [x] **Settings panel**: what the glance shows (up to 4 cards) and which AI windows; the closed bar's right side; catch screenshots; the apps bar (most used / favourites / off, and on which views); the companion (bot or photo, mode, when it sleeps); notch style; where the dock sits; ambient glow, album tint, start on boot.
+- [x] **Settings panel**: laid out like System Settings: a sidebar of sections (Glance, Companion, Closed notch, Apps, Tabs & dock, Appearance, General), one section at a time as grouped rows, each with a one-line explanation and one control. A side taken by the dock or the apps bar is greyed out for the other.
 - [ ] **Keyboard shortcut to open** — the notch is hover-only otherwise, so there
   is no way to reach it without the mouse.
 

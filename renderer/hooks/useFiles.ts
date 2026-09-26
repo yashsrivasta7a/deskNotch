@@ -99,7 +99,7 @@ export const revealFile = (file: string) => void window.bridge?.invoke('files:re
  * `home` (the element it came from) — a real drop — and false when it came
  * back. If the drag could not be followed to its end, it counts as out.
  */
-export const dragFile = async (file: string, home: Element | null) => {
+export const dragFile = async (file: string | string[], home: Element | null) => {
   const result = await window.bridge?.invoke<{ at: { x: number; y: number }; blocked: boolean } | null>('files:drag', file)
   if (!result) return false
   if (!result.blocked || !home) return true

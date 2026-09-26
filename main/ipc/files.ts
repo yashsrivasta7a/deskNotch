@@ -137,10 +137,14 @@ export function registerFilesIpc() {
   // On Windows startDrag runs the system's drag loop and returns when the drag
   // ends, so the reply says where the pointer let go — the renderer uses it to
   // tell a drop elsewhere (take the file off the shelf) from a drop back home.
-  ipcMain.handle('files:drag', (event, file: unknown) => {
-    if (!isPath(file) || !fs.existsSync(file)) return null
+  // One path, or several: "drag all" carries the whole shelf as one drag,
+  // which Explorer, chat apps and mail take as a multi-file drop.
+  ipcMain.handle('files:drag', (event, which: unknown) => {
+    const files = (Array.isArray(which) ? which : [which]).filter((f): f is string => isPath(f) && fs.existsSync(f))
+    if (!files.length) return null
+    const file = files[0]
     const began = Date.now()
-    event.sender.startDrag({ file, icon: icons.get(file) ?? BLANK })
+    event.sender.startDrag({ file, files, icon: icons.get(file) ?? BLANK })
     return { at: screen.getCursorScreenPoint(), blocked: Date.now() - began > 120 }
   })
 }

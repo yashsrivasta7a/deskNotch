@@ -373,6 +373,39 @@ the moment either changes.
 
 ---
 
+## 6b. Around the notch: the dock and the apps tray
+
+Two things can sit outside the notch: the dock of tabs and the apps tray. One
+rule keeps it tidy: **they never share a side.** Under the notch they stack in
+one column, the tray against the notch and the dock below it; beside it they
+hang from the screen's edge like small islands, the dock nearest. Settings greys
+out a side the other one has, and Auto picks a free side (the right when the
+dock is below, otherwise under the notch). The tray shows four apps under the
+notch and two beside it, and scrolls for the rest; its + stays outside the
+scroll so adding is always one click.
+
+Both, and any popover of theirs (the favourites picker), are part of the notch
+for hit testing and for "has the pointer left?", through the `data-notch-part`
+attribute and a re-check every 250 ms while open.
+
+## 6c. Materials
+
+The window is transparent, but Electron cannot blur what is behind part of a
+window, and Windows' own acrylic covers the whole window (here, the whole top
+of the screen). So the materials are drawn:
+
+- **Mica** paints the wallpaper file Windows keeps, blurred, sized to the
+  display and shifted by the surface's position, which is how Windows 11's
+  Mica works too.
+- **Glass** shows a live screen capture, blurred, the same way. The window is
+  excluded from capture (`setContentProtection`), so the capture shows what is
+  behind it. One capture is shared by every surface (reference-counted), at
+  15 fps, while Glass is on. The cost: the notch vanishes from screenshots and
+  screen shares in that mode.
+
+Only the background changes with the style; readings, tints and accents keep
+their own colours.
+
 ## 7. Where main-process code lives
 
 ```
@@ -412,7 +445,7 @@ else is touched, and no file grows because a feature had nowhere else to go.
   `renderer/hooks/useNowPlaying.ts` (renderer).
 - **A new IPC handler** → a file in `main/ipc/`, plus one line in its index.
 - **Corner radius** → the tokens at the top of `renderer/styles/globals.css`.
-- **Glass surfaces** → the `.glass` and `.glass-control` classes in the same file.
+- **Materials (Default, Mica, Glass)** → `Backdrop.tsx` in `renderer/components/notch/`, used by the notch, the dock and the apps tray; the Default colour is `CORNER_FILLS` in `NotchChassis.tsx`.
 - **Strip height, always-on-top, click-through** → `main/main.ts`, needs a restart.
 - **Padding inside the open notch** → `PAD` in `NotchChassis.tsx`; every view sizes itself from it.
 - **A moment that opens the notch by itself** → `peek(view, ms)` in `renderer/pages/home.tsx`.

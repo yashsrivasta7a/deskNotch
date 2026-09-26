@@ -18,9 +18,9 @@ A notch for Windows, after Apple's Dynamic Island. It sits at the top centre of 
 
 **Moments**: the notch opens by itself, briefly, for a screenshot just taken (drag it anywhere, keep it, open it, or discard it) and for a finished focus session.
 
-**Apps bar**: Windows' own most-used apps, or your favourites, under the notch on the views you choose.
+**Apps bar**: Windows' own most-used apps, or your favourites, in a small tray beside or under the notch on the views you choose; four in view (two beside it), the rest a scroll away.
 
-Everything is a setting: what the glance shows, the companion and its mode, where the dock sits, the style (glass, translucent, black), the closed bar's right side, the apps bar, screenshots, start on boot.
+Everything is a setting: what the glance shows, the companion and its mode, where the dock sits, the style (Default, a soft charcoal; Mica, your wallpaper frosted; Glass, a live blur of whatever is behind it), which tabs the dock shows, the closed bar's right side, the apps bar, screenshots, start on boot.
 
 ## Requirements
 

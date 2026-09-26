@@ -156,6 +156,7 @@ The rule it follows: **nothing slow or blocking runs on main's event loop**, bec
 | Bluetooth | ~30 s (every 20th tick) | a batched PnP property query, ~1 to 2 s, since each device is asked | same process |
 | Screenshots | event-driven | `fs.watch` (ReadDirectoryChangesW); zero cost when idle | [screenshots.ts](main/ipc/screenshots.ts) |
 | Headphones | event-driven | Chromium's `devicechange`; nothing of ours runs | [useHeadphones.ts](renderer/hooks/useHeadphones.ts) |
+| Glass style | only while Glass is on | one 15 fps screen capture shared by every surface, then a CSS blur; stops when you switch style | [Backdrop.tsx](renderer/components/notch/Backdrop.tsx) |
 | AI limits | every 2 min while shown, min gap 60 s | one HTTPS call per provider; 5 min back-off after a failure | [limits.ts](main/ipc/limits.ts) |
 | Most used apps | once per 30 min | `reg query` + one PowerShell with a C# icon helper, ~2 to 4 s cold, then cached | [apps.ts](main/ipc/apps.ts) |
 
@@ -176,6 +177,7 @@ The rule it follows: **nothing slow or blocking runs on main's event loop**, bec
 | When to close the notch | Close only when the **real** cursor (from main) is 48 px away and still moving away | DOM `mouseleave`: fires falsely when a view shrinks under a still pointer, and when the window turns click-through at its edge; Chromium also sends synthetic moves during layout |
 | Reading media | `SMTC` in a worker thread, change events as a trigger to re-read the whole session | On main: the library blocks its thread. Stitching partial events: every event carries a different subset, so ordering bugs are guaranteed |
 | Controlling media | The system media keys via `keybd_event` | SMTC control calls: the library only observes. Per-player APIs: one integration per app |
+| Glass / Mica material | Draw it: a blurred screen capture (window excluded from capture) or the wallpaper, positioned per surface | Windows acrylic (`setBackgroundMaterial`): covers the whole window, here the whole top strip. CSS `backdrop-filter`: only blurs our own page, not other apps |
 | Screenshots | Watch the folder Snipping Tool saves to | Clipboard polling: reads a full bitmap every tick to detect change. Global keyboard hook: needs a native module and sees the key, not the result |
 | Mic / camera state | The ConsentStore registry, which Windows' own tray icon uses | WinRT capability APIs: need NodeRT, a native module rebuilt per Electron version. No official API exists for "in use" |
 | Most used apps | UserAssist, ranked by focus time | Running-process lists: show what is open, not what you use. Prefetch or event logs: need admin |
@@ -345,6 +347,8 @@ Its own view in the notch (the Shelf circle on the side rail), with a switch bet
 Every file chip works the same: **click** opens it, **right-click** shows it in its folder, **drag** carries the real file out to wherever you drop it. Shelf and Pinned chips have a remove × on hover.
 
 ### 3a. Dropping files in
+
+A drop is taken **anywhere on the notch**, not just on the shelf's dashed well: the page listens for drops on the whole window, and hands the paths to the shelf (a `shelf:add` event), or, if the shelf is not on screen yet because the notch is still opening, saves them straight to its list for when it appears.
 
 ```mermaid
 sequenceDiagram
@@ -573,7 +577,7 @@ sequenceDiagram
 | What | How it talks to Windows | Code |
 |---|---|---|
 | **Mica** style | The wallpaper file Windows keeps (below), drawn blurred and darkened, sized to the display and shifted by the notch's position, so the notch shows the part of the wallpaper it covers (Windows 11's own Mica works the same way) | [Backdrop.tsx](renderer/components/notch/Backdrop.tsx) |
-| **Glass** style | A live capture of the screen, blurred, shown only while the notch is open, at 15 fps. The window is excluded from capture with `setContentProtection(true)` (WDA_EXCLUDEFROMCAPTURE), so the capture shows what is **behind** the notch, not the notch; `desktopCapturer` picks the display's source and the renderer streams it with `getUserMedia` | [system.ts](main/ipc/system.ts), [Backdrop.tsx](renderer/components/notch/Backdrop.tsx) |
+| **Glass** style | A live capture of the screen, blurred, on the notch (open or closed), the dock and the apps tray: **one** capture shared by all of them (reference-counted), at 15 fps, while Glass is on. Small surfaces blur less so what is behind stays recognisable. The window is excluded from capture with `setContentProtection(true)` (WDA_EXCLUDEFROMCAPTURE), so the capture shows what is **behind** the notch, not the notch; `desktopCapturer` picks the display's source and the renderer streams it with `getUserMedia` | [system.ts](main/ipc/system.ts), [Backdrop.tsx](renderer/components/notch/Backdrop.tsx) |
 | Glass tint from the wallpaper | Reads `%APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper`, the copy of the current wallpaper Windows keeps | [system.ts:20](main/ipc/system.ts#L20) |
 | Accent colour | `systemPreferences.getAccentColor()`, the colour set in Personalisation | [system.ts:40](main/ipc/system.ts#L40) |
 | 12-hour clock | Built from the system time; the closed bar shows it on the left whenever no focus session or music is running | [time.ts](renderer/lib/time.ts) |
