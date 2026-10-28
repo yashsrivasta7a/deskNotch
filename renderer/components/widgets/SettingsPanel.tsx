@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { BotAvatar, type BotAvatarType } from 'bot-avatars'
-import { Bot, ImagePlus, LayoutGrid, PanelsTopLeft, Settings as Cog } from 'lucide-react'
+import { Bot, ChevronDown, Heart, ImagePlus, LayoutGrid, PanelsTopLeft, Settings as Cog } from 'lucide-react'
 import { usePhoto } from '../../hooks/usePhoto'
 import type { ProviderLimits } from '../../hooks/useAiLimits'
 import { limitChoices, visibleLimits } from './AiOrbs'
@@ -18,6 +18,9 @@ export const SETTINGS_PANE = 312
 /** Default, a soft charcoal notch; Glass, a live blur of what is behind. */
 export type NotchStyle = 'black' | 'glass'
 
+/** Left, centre or right along the top edge. */
+export type NotchAlign = 'left' | 'center' | 'right'
+
 /** A bot, or the user's own photo. */
 export type Avatar = BotAvatarType | 'photo'
 
@@ -31,9 +34,10 @@ export interface Settings {
   /** The Right now card: apps on the mic or camera, and the battery, while there are any. */
   showStatus: boolean
   ambientVideo: boolean
-  albumTint: boolean
   startOnBoot: boolean
   notchStyle: NotchStyle
+  /** Where the notch sits along the top of the screen. */
+  notchAlign?: NotchAlign
   /** Where the dock of views and controls sits around the notch. */
   dockSide: DockSide
   /** Views taken off the dock ('glance', 'desk', 'files'); Settings and the lock always stay. */
@@ -78,15 +82,15 @@ export const DOCK_SCALE: Record<DockSize, number> = { default: 1, large: 1.25, l
 
 export const DEFAULT_SETTINGS: Settings = {
   showMusic: true,
-  showTasks: false,
+  showTasks: true,
   showAvatar: true,
   showFocus: false,
   showAiUsage: true,
   showStatus: false,
   ambientVideo: true,
-  albumTint: true,
   startOnBoot: true,
   notchStyle: 'black',
+  notchAlign: 'center',
   dockSide: 'bottom',
   hiddenViews: [],
   collapsedRight: 'time',
@@ -240,18 +244,41 @@ const Group: React.FC<{ children: React.ReactNode; note?: string }> = ({ childre
   </div>
 )
 
+/** The rarely-needed settings, folded away until asked for. */
+const More: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={(event) => {
+          halt(event)
+          setOpen((o) => !o)
+        }}
+        className="flex h-[28px] w-full items-center justify-between rounded-[12px] bg-white/[0.045] px-3 text-[12px] text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+      >
+        {label}
+        <ChevronDown size={14} strokeWidth={2} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="mt-2">{children}</div>}
+    </div>
+  )
+}
+
 // ── Sections ────────────────────────────────────────────────────────────────
 
 /** The blocks of settings; a sidebar section shows one or more of them. */
 type PartId = 'glance' | 'companion' | 'closed' | 'apps' | 'tabs' | 'look' | 'general'
 type SectionId = 'notch' | 'companion' | 'layout' | 'general'
 
-/** Four sections, few enough to take in at once; each names its blocks when it has several. */
-const SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; parts: { id: PartId; title: string }[] }[] = [
-  { id: 'notch', label: 'Notch', icon: <LayoutGrid size={13} strokeWidth={2} />, parts: [{ id: 'glance', title: 'Home cards' }, { id: 'closed', title: 'Closed notch' }] },
+/** Four sections, few enough to take in at once. A block marked `more` stays
+ *  folded until opened, so the page opens on what most people change. */
+const SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; parts: { id: PartId; title: string; more?: boolean }[] }[] = [
+  { id: 'notch', label: 'Home', icon: <LayoutGrid size={13} strokeWidth={2} />, parts: [{ id: 'glance', title: 'Cards' }, { id: 'closed', title: 'Closed notch' }] },
   { id: 'companion', label: 'Companion', icon: <Bot size={13} strokeWidth={2} />, parts: [{ id: 'companion', title: '' }] },
-  { id: 'layout', label: 'Layout', icon: <PanelsTopLeft size={13} strokeWidth={2} />, parts: [{ id: 'tabs', title: 'Tabs' }, { id: 'apps', title: 'Apps bar' }] },
-  { id: 'general', label: 'General', icon: <Cog size={13} strokeWidth={2} />, parts: [{ id: 'look', title: 'Appearance' }, { id: 'general', title: 'System' }] },
+  { id: 'layout', label: 'Look', icon: <PanelsTopLeft size={13} strokeWidth={2} />, parts: [{ id: 'look', title: '' }, { id: 'tabs', title: 'Tabs', more: true }, { id: 'apps', title: 'Apps bar', more: true }] },
+  { id: 'general', label: 'General', icon: <Cog size={13} strokeWidth={2} />, parts: [{ id: 'general', title: '' }] },
 ]
 
 interface SettingsPanelProps {
@@ -371,6 +398,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
     <Switch label={label} on={settings[key]} disabled={!settings[key] && !fits(key)} onChange={(v) => set(key, v)} />
   )
   const hiddenViews = settings.hiddenViews ?? []
+  // Against a screen edge (notch left or right) that side has no room for the dock or apps bar.
+  const edge = settings.notchAlign ?? 'center'
+  const dockNow = (settings.dockSide ?? 'bottom') === edge ? 'bottom' : (settings.dockSide ?? 'bottom')
+  const appsPicked = settings.appsSide ?? 'auto'
+  const appsShown = appsPicked === dockNow || appsPicked === edge ? 'auto' : appsPicked
 
   const content: Record<PartId, React.ReactNode> = {
     glance: (
@@ -538,11 +570,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
                   { id: 'right', label: 'Right' },
                 ] as const}
                 // A side the dock has (older settings) is really auto: show that.
-                value={(settings.appsSide ?? 'auto') === (settings.dockSide ?? 'bottom') ? 'auto' : (settings.appsSide ?? 'auto')}
+                value={appsShown}
                 onChange={(v) => set('appsSide', v)}
-                // One side, one thing: the tabs dock's side is taken.
-                disabled={[settings.dockSide ?? 'bottom']}
-                disabledTitle="The tabs dock is here"
+                // One side, one thing: the tabs dock's side, or the screen's edge, is taken.
+                disabled={[dockNow, edge]}
+                disabledTitle="Not available here"
               />
             </Row>
           )}
@@ -602,11 +634,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
                 { id: 'bottom', label: 'Bottom' },
                 { id: 'right', label: 'Right' },
               ] as const}
-              value={settings.dockSide ?? 'bottom'}
+              value={dockNow}
               onChange={(v) => set('dockSide', v)}
-              // One side, one thing: a side the apps bar was put on is taken.
-              disabled={(settings.appsSide ?? 'auto') !== 'auto' && (settings.deskApps ?? 'most') !== 'off' ? [settings.appsSide] : []}
-              disabledTitle="The apps bar is here"
+              // One side, one thing: a side the apps bar was put on, or the screen's edge, is taken.
+              disabled={[...((settings.appsSide ?? 'auto') !== 'auto' && (settings.deskApps ?? 'most') !== 'off' ? [settings.appsSide] : []), edge]}
+              disabledTitle="Not available here"
             />
           </Row>
         </Group>
@@ -615,9 +647,19 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
     look: (
       <>
         <Group>
-          <Row
-            title="Style"
-          >
+          <Row title="Notch position" detail="Where it sits along the top">
+            <Segmented
+              id="align"
+              options={[
+                { id: 'left', label: 'Left' },
+                { id: 'center', label: 'Center' },
+                { id: 'right', label: 'Right' },
+              ] as const}
+              value={edge}
+              onChange={(v) => set('notchAlign', v)}
+            />
+          </Row>
+          <Row title="Style">
             <Segmented
               id="style"
               options={[
@@ -630,9 +672,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
           </Row>
           <Row title="Music glow">
             <Switch label="Ambient glow" on={settings.ambientVideo} onChange={(v) => set('ambientVideo', v)} />
-          </Row>
-          <Row title="Album colours">
-            <Switch label="Album tint" on={settings.albumTint} onChange={(v) => set('albumTint', v)} />
           </Row>
         </Group>
       </>
@@ -661,25 +700,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
               <Switch label="Start with Windows" on={settings.startOnBoot} onChange={(v) => set('startOnBoot', v)} />
             </Row>
           )}
-          <Row title="Hide in fullscreen" detail="Videos, games and F11">
-            <Switch label="Hide on Fullscreen" on={settings.hideOnFullscreen ?? true} onChange={(v) => set('hideOnFullscreen', v)} />
-          </Row>
-          {/* Glass needs the notch out of every capture to see what is behind it,
-              so under Glass this is on and cannot be turned off. */}
-          <Row
-            title="Hide in screenshots"
-            detail={settings.notchStyle === 'glass' ? 'Always on with Glass' : 'Also screen recordings and sharing'}
-          >
-            <Switch
-              label="Hide in screenshots"
-              on={settings.notchStyle === 'glass' || (settings.hideInScreenshots ?? false)}
-              disabled={settings.notchStyle === 'glass'}
-              onChange={(v) => set('hideInScreenshots', v)}
-            />
-          </Row>
-          <Row title="Shrink over browsers" detail="Keeps browser tabs visible">
-            <Switch label="Tuck behind browsers" on={settings.tuckForBrowsers ?? false} onChange={(v) => set('tuckForBrowsers', v)} />
-          </Row>
         </Group>
         {displays.length > 1 && (
           <Group>
@@ -707,6 +727,29 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             </Row>
           </Group>
         )}
+        <More label="More options">
+        <Group>
+          <Row title="Hide in fullscreen" detail="Videos, games and F11">
+            <Switch label="Hide on Fullscreen" on={settings.hideOnFullscreen ?? true} onChange={(v) => set('hideOnFullscreen', v)} />
+          </Row>
+          {/* Glass needs the notch out of every capture to see what is behind it,
+              so under Glass this is on and cannot be turned off. */}
+          <Row
+            title="Hide in screenshots"
+            detail={settings.notchStyle === 'glass' ? 'Always on with Glass' : 'Also screen recordings and sharing'}
+          >
+            <Switch
+              label="Hide in screenshots"
+              on={settings.notchStyle === 'glass' || (settings.hideInScreenshots ?? false)}
+              disabled={settings.notchStyle === 'glass'}
+              onChange={(v) => set('hideInScreenshots', v)}
+            />
+          </Row>
+          <Row title="Shrink over browsers" detail="Keeps browser tabs visible">
+            <Switch label="Tuck behind browsers" on={settings.tuckForBrowsers ?? false} onChange={(v) => set('tuckForBrowsers', v)} />
+          </Row>
+        </Group>
+        </More>
       </>
     ),
   }
@@ -734,6 +777,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             </button>
           )
         })}
+        {/* Sponsoring: not in the Store build, which keeps to the Store's own payment rules. */}
+        {!store && (
+          <button
+            type="button"
+            onClick={(event) => {
+              halt(event)
+              void window.bridge?.invoke('app:open-support')
+            }}
+            className="mt-auto flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <Heart size={12} strokeWidth={2.2} />
+            Support
+          </button>
+        )}
         {/* The project's GitHub, at the foot of the sidebar whatever the section. */}
         <button
           type="button"
@@ -741,7 +798,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             halt(event)
             void window.bridge?.invoke('app:open-repo')
           }}
-          className="mt-auto flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
+          className={`${store ? 'mt-auto ' : ''}flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white`}
         >
           <GitHubMark />
           GitHub
@@ -761,8 +818,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             <h2 className="mb-2.5 px-1 text-[15px] font-semibold text-white">{SECTIONS.find((s) => s.id === section)?.label}</h2>
             {SECTIONS.find((s) => s.id === section)?.parts.map((part) => (
               <React.Fragment key={part.id}>
-                {part.title && <h3 className="mb-1.5 mt-1 px-1 text-[11.5px] font-medium text-white/45">{part.title}</h3>}
-                {content[part.id]}
+                {part.more ? (
+                  <More label={part.title}>{content[part.id]}</More>
+                ) : (
+                  <>
+                    {part.title && <h3 className="mb-1.5 mt-1 px-1 text-[11.5px] font-medium text-white/45">{part.title}</h3>}
+                    {content[part.id]}
+                  </>
+                )}
               </React.Fragment>
             ))}
           </motion.div>

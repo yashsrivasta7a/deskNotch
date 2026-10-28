@@ -6,6 +6,7 @@
  * this file.
  */
 import { app } from 'electron'
+import { randomUUID } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
@@ -30,6 +31,14 @@ export interface StoreShape {
 
 const defaults: StoreShape = { todos: [], settings: {}, photo: null, shelf: [], pins: [], focusLog: [], reminders: [], aiConsent: null }
 
+/** A first launch starts with a short list that shows what the card does, instead of an empty one. */
+const welcomeTasks = () =>
+  ['Tap this circle to tick it off', 'Add your own with +', 'Drop a file on the notch to park it'].map((label) => ({
+    id: randomUUID(),
+    label,
+    done: false,
+  }))
+
 let cache: StoreShape | null = null
 
 const file = () => path.join(app.getPath('userData'), 'desknotch-store.json')
@@ -40,9 +49,10 @@ export const readStore = (): StoreShape => {
   let loaded: StoreShape
   try {
     loaded = { ...defaults, ...JSON.parse(fs.readFileSync(file(), 'utf8')) }
-  } catch {
-    // Missing or corrupt: start clean rather than failing to launch.
-    loaded = { ...defaults }
+  } catch (error) {
+    // Missing or corrupt: start clean rather than failing to launch. Only a
+    // missing file is a first launch; a corrupt one has no business re-seeding.
+    loaded = { ...defaults, ...((error as NodeJS.ErrnoException).code === 'ENOENT' ? { todos: welcomeTasks() } : {}) }
   }
 
   cache = loaded

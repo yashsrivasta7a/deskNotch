@@ -91,6 +91,10 @@ Everything stays on your PC. Media, microphone and camera state, Wi-Fi, Bluetoot
 - **Screenshots** are caught when Snipping Tool saves them, which is its default.
 - **AI usage** appears only if you use Claude Code or Codex on the same PC.
 
+## Support
+
+DeskNotch is free. If it earns a place on your desktop, you can [sponsor it on GitHub](https://github.com/sponsors/yashsrivasta7a).
+
 ## Feedback
 
 Found a bug or have an idea? [Open an issue](https://github.com/yashsrivasta7a/deskNotch/issues) with what you did, what happened, and a screenshot if something looked off.

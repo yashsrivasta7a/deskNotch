@@ -28,7 +28,7 @@ const ControlButton: React.FC<ControlButtonProps> = ({ label, solid, onClick, ch
     whileTap={{ scale: 0.92 }}
     transition={spring}
     className={`grid place-items-center rounded-full transition-colors ${
-      solid ? 'w-8 h-8 bg-white text-black hover:bg-white/90' : 'w-7 h-7 text-white/60 hover:text-white'
+      solid ? 'w-10 h-10 bg-white text-black hover:bg-white/90' : 'w-9 h-9 text-white/60 hover:text-white'
     } focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/40`}
   >
     {children}
@@ -50,15 +50,15 @@ export const MediaControls: React.FC<MediaControlsProps> = ({
 }) => (
   <div className="flex items-center gap-0.5">
     <ControlButton label="Previous track" onClick={onPrevious}>
-      <SkipBack size={13} {...glyph} />
+      <SkipBack size={17} {...glyph} />
     </ControlButton>
 
     <ControlButton label={isPlaying ? 'Pause' : 'Play'} solid onClick={onPlayPause}>
-      {isPlaying ? <Pause size={15} {...glyph} /> : <Play size={15} {...glyph} />}
+      {isPlaying ? <Pause size={19} {...glyph} /> : <Play size={19} {...glyph} />}
     </ControlButton>
 
     <ControlButton label="Next track" onClick={onNext}>
-      <SkipForward size={13} {...glyph} />
+      <SkipForward size={17} {...glyph} />
     </ControlButton>
   </div>
 )

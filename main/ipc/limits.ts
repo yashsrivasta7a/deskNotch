@@ -151,12 +151,10 @@ const askConsent = async () => {
   const { response } = await dialog.showMessageBox({
     type: 'question',
     title: 'DeskNotch',
-    message: 'Show your Claude Code and Codex usage limits?',
+    message: 'Show your Claude and Codex usage?',
     detail:
-      'To show your plan limits, DeskNotch reads the sign-in that Claude Code and Codex already keep on this PC, ' +
-      'and sends it only to Anthropic or OpenAI to fetch your usage. It is never stored elsewhere or sent anywhere else. ' +
-      'Your use of those services stays under their own terms.\n\n' +
-      'You can change this later by switching AI usage on or off in Settings.',
+      'DeskNotch uses the sign-in Claude Code and Codex already keep on this PC, only to ask Anthropic or OpenAI for your usage. ' +
+      'Nothing is stored or sent anywhere else. You can turn this off in Settings.',
     buttons: ['Allow', 'Not now'],
     defaultId: 0,
     cancelId: 1,
@@ -186,9 +184,13 @@ const consented = async () => {
   return asking
 }
 
+/** Whether either tool has a sign-in on this PC. Only the files' existence is
+ *  checked here, never their contents, so nobody is asked about a tool they do not use. */
+const signedIn = () => ['.claude/.credentials.json', '.codex/auth.json'].some((file) => fs.existsSync(path.join(os.homedir(), file)))
+
 export function registerLimitsIpc() {
   ipcMain.handle('ai:limits', async (_event, force?: unknown) => {
-    if (!(await consented())) return []
+    if (!signedIn() || !(await consented())) return []
     return (await Promise.all([claude(force === true), codex(force === true)])).filter(Boolean) as ProviderLimits[]
   })
 }

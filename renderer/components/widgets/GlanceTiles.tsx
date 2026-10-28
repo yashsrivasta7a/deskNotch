@@ -6,7 +6,6 @@ import { ScrollingText } from '../notch/ScrollingText'
 import { Tile, TileLabel } from '../ui/tile'
 import { QuickAdd } from './QuickAdd'
 import { useNow } from '../../hooks/useNow'
-import { useMediaProgress } from '../../hooks/useMediaProgress'
 import type { NowPlaying } from '../../hooks/useNowPlaying'
 import type { TaskStore } from '../../hooks/useTasks'
 
@@ -31,55 +30,6 @@ const playerName = (id: string) => {
   return bare.charAt(0).toUpperCase() + bare.slice(1)
 }
 
-/**
- * Where the track is: a rounded bar in the cover's colour, with a dot at the
- * spot. Paused, the fill dims and the dot shrinks. With no length known
- * (most browser tabs), a soft light sweeps along it while playing.
- *
- * No minutes and seconds: Windows reports the position only every few
- * seconds (browsers hardly at all), so a clock here jumped about.
- */
-const ProgressLine: React.FC<{ progress: number | null; playing: boolean; tint: string }> = ({ progress, playing, tint }) => {
-  const move = { ease: 'linear' as const, duration: 0.5 }
-  return (
-    <div className="relative flex h-[10px] items-center">
-      <div className="relative h-[4px] w-full overflow-hidden rounded-full bg-white/[0.1]">
-        {progress === null ? (
-          // Length unknown: a light gliding along while it plays.
-          <motion.div
-            className="absolute inset-y-0 w-[40%] rounded-full"
-            style={{ background: `linear-gradient(90deg, transparent, rgba(${tint}, 0.9), transparent)` }}
-            initial={{ left: '-40%' }}
-            animate={playing ? { left: ['-40%', '100%'] } : { left: '30%', opacity: 0.35 }}
-            transition={playing ? { duration: 2.4, ease: 'easeInOut', repeat: Infinity, repeatDelay: 0.4 } : { duration: 0.4 }}
-          />
-        ) : (
-          <motion.div
-            className="h-full rounded-full"
-            style={{
-              background: `linear-gradient(90deg, rgba(${tint}, 0.55), rgb(${tint}))`,
-              boxShadow: `0 0 8px rgba(${tint}, 0.55)`,
-            }}
-            initial={false}
-            animate={{ width: `${progress * 100}%`, opacity: playing ? 1 : 0.45 }}
-            transition={{ width: move, opacity: { duration: 0.3 } }}
-          />
-        )}
-      </div>
-      {/* Where it is now, outside the track so it is not clipped. */}
-      {progress !== null && (
-        <motion.span
-          className="absolute top-1/2 h-[8px] w-[8px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
-          style={{ boxShadow: `0 0 6px rgba(${tint}, 0.9)` }}
-          initial={false}
-          animate={{ left: `${progress * 100}%`, scale: playing ? 1 : 0.6 }}
-          transition={{ left: move, scale: { duration: 0.3 } }}
-        />
-      )}
-    </div>
-  )
-}
-
 /** Three bars that dance while music plays and lie flat when paused. */
 const Bars: React.FC<{ playing: boolean; color: string }> = ({ playing, color }) => (
   <span className="flex h-[9px] items-end gap-[2px]">
@@ -95,10 +45,7 @@ const Bars: React.FC<{ playing: boolean; color: string }> = ({ playing, color })
   </span>
 )
 
-export const MediaTile: React.FC<{ media: NowPlaying; tint: string }> = ({ media, tint }) => {
-  const progress = useMediaProgress(media)
-
-  return (
+export const MediaTile: React.FC<{ media: NowPlaying; tint: string }> = ({ media, tint }) => (
   <Tile
     width={MEDIA_WIDTH}
     tinted
@@ -131,34 +78,30 @@ export const MediaTile: React.FC<{ media: NowPlaying; tint: string }> = ({ media
       <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
         <div className="min-w-0">
           {/* Where it is playing, and that it is: the source, with the bars. */}
-          <div className="mb-1 flex items-center gap-1.5">
+          <div className="mb-1.5 flex items-center gap-1.5">
             <Bars playing={media.isPlaying} color={`rgb(${tint})`} />
-            <span className="truncate text-[8.5px] font-bold uppercase leading-none tracking-[0.12em] text-white/40">
+            <span className="truncate text-[9.5px] font-bold uppercase leading-none tracking-[0.12em] text-white/40">
               {media.isPlaying ? playerName(media.sourceAppId) : `Paused · ${playerName(media.sourceAppId)}`}
             </span>
           </div>
-          <ScrollingText className="text-[14px] font-semibold leading-tight tracking-[-0.01em] text-white">
+          <ScrollingText className="text-[17px] font-semibold leading-tight tracking-[-0.01em] text-white">
             {media.title}
           </ScrollingText>
-          <span className="mt-0.5 block truncate text-[11.5px] leading-tight text-white/50">{media.artist}</span>
+          <span className="mt-0.5 block truncate text-[13px] leading-tight text-white/50">{media.artist}</span>
         </div>
-        <div>
-          {/* Where the track is: a line, not a scrubber; this is a glance. */}
-          <ProgressLine progress={media.duration > 0 ? progress : null} playing={media.isPlaying} tint={tint} />
-          <div className="-mb-1 mt-1.5 flex justify-center">
-            <MediaControls
-              isPlaying={media.isPlaying}
-              onPrevious={() => void window.bridge?.invoke('media:key', 'previous')}
-              onPlayPause={() => void window.bridge?.invoke('media:key', 'play-pause')}
-              onNext={() => void window.bridge?.invoke('media:key', 'next')}
-            />
-          </div>
+        {/* Left, in line with the words; the buttons' own padding is pulled back so the first icon lines up. */}
+        <div className="-ml-2 flex justify-start">
+          <MediaControls
+            isPlaying={media.isPlaying}
+            onPrevious={() => void window.bridge?.invoke('media:key', 'previous')}
+            onPlayPause={() => void window.bridge?.invoke('media:key', 'play-pause')}
+            onNext={() => void window.bridge?.invoke('media:key', 'next')}
+          />
         </div>
       </div>
     </div>
   </Tile>
-  )
-}
+)
 
 const partOfDay = (now: Date) => {
   const hour = now.getHours()
@@ -245,9 +188,9 @@ export const TaskTile: React.FC<{ tasks: TaskStore; accent: string }> = ({ tasks
             className="flex flex-1 flex-col items-center justify-center gap-1.5 pb-2"
           >
             <span className="grid h-[26px] w-[26px] place-items-center rounded-full" style={{ background: accent }}>
-              <Check size={14} strokeWidth={3} className="text-black" />
+              {tasks.tasks.length === 0 ? <Plus size={14} strokeWidth={3} className="text-black" /> : <Check size={14} strokeWidth={3} className="text-black" />}
             </span>
-            <span className="text-[12.5px] font-medium text-white/80">All done</span>
+            <span className="text-[12.5px] font-medium text-white/80">{tasks.tasks.length === 0 ? 'No tasks yet' : 'All done'}</span>
           </motion.div>
         ) : (
           <div className="-mr-1 flex min-h-0 flex-1 flex-col overflow-y-auto pr-1 [scrollbar-width:none]">

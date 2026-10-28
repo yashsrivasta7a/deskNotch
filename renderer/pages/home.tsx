@@ -17,7 +17,7 @@ import { ReminderView, REMINDER_HEIGHT, REMINDER_WIDTH } from '../components/wid
 import { useReminders, type Reminder } from '../hooks/useReminders'
 import type { FileItem } from '../hooks/useFiles'
 import { botAvatarPalette } from 'bot-avatars'
-import { CompanionTile, COMPANION_WIDTH, COMPANION_OPEN_WIDTH, COMPANION_REMINDER_WIDTH, COMPANION_TIME_WIDTH, type CompanionMode } from '../components/widgets/CompanionTile'
+import { CompanionTile, COMPANION_MODES, COMPANION_WIDTH, COMPANION_OPEN_WIDTH, COMPANION_REMINDER_WIDTH, COMPANION_TIME_WIDTH, type CompanionMode } from '../components/widgets/CompanionTile'
 import { MediaTile, TimeTile, TaskTile, MEDIA_WIDTH, TIME_WIDTH, TASK_WIDTH } from '../components/widgets/GlanceTiles'
 import { FocusTile, FOCUS_WIDTH } from '../components/widgets/FocusTile'
 import { StatusTile, STATUS_WIDTH, statusShown, type StatusPage } from '../components/widgets/StatusTile'
@@ -50,6 +50,8 @@ const SIZES: Record<string, { width: number; height: number }> = {
   settings: { width: CHROME_X + 620, height: CHROME_Y + SETTINGS_PANE },
 }
 
+/** How far a left- or right-aligned notch sits from the screen's edge; its curved ears need the room. */
+const EDGE_MARGIN = 20
 /** The notch's side padding around the card row. */
 const PADDING = PAD
 /** The bar, a clear step, the cards, and room below them. */
@@ -292,14 +294,14 @@ export default function HomePage() {
           // Older settings kept a list of topics under another name; the first
           // one becomes the mode.
           // The AI mode became Screen time, and Tasks became Reminder.
-          companionMode:
-            ((stored?.companionMode as string) === 'ai'
+          // Anything that is not a mode (nothing stored yet, or a bad value) is the default.
+          companionMode: ((mode) => (COMPANION_MODES.some((m) => m.id === mode) ? (mode as CompanionMode) : DEFAULT_SETTINGS.companionMode))(
+            (stored?.companionMode as string) === 'ai'
               ? 'screen'
               : (stored?.companionMode as string) === 'tasks'
                 ? 'reminder'
-                : stored?.companionMode) ??
-            ((Array.isArray((stored as any)?.companionSays) && (stored as any)?.companionSays[0]) as CompanionMode | undefined) ??
-            DEFAULT_SETTINGS.companionMode,
+                : (stored?.companionMode ?? (Array.isArray((stored as any)?.companionSays) ? (stored as any).companionSays[0] : undefined)),
+          ),
         }
 
         try {
@@ -352,9 +354,15 @@ export default function HomePage() {
   // The apps bar's place: on the right when the tabs dock is under the notch
   // (so the two do not stack), otherwise under the notch; or wherever chosen.
   // They never share a side: a chosen side the dock already has (older settings) falls back to auto.
+  // Against a screen edge (notch left or right) that side has no room, so the
+  // dock and apps bar never take it.
+  const align = settings.notchAlign ?? 'center'
+  const free = (['bottom', 'right', 'left'] as const).filter((side) => side !== align)
+  const chosenDock = settings.dockSide ?? 'bottom'
+  const dockSideNow = free.includes(chosenDock) ? chosenDock : 'bottom'
   const chosenApps = settings.appsSide ?? 'auto'
-  const dockSideNow = settings.dockSide ?? 'bottom'
-  const appsSide = chosenApps === 'auto' || chosenApps === dockSideNow ? (dockSideNow === 'bottom' ? 'right' : 'bottom') : chosenApps
+  const wantedApps = chosenApps === 'auto' ? (dockSideNow === 'bottom' ? 'right' : 'bottom') : chosenApps
+  const appsSide = wantedApps !== dockSideNow && free.includes(wantedApps) ? wantedApps : free.find((side) => side !== dockSideNow)!
 
   const isPlayingAudio = Boolean(nowPlaying?.isPlaying)
   // The style only changes the background: the glow follows the album (when
@@ -398,7 +406,10 @@ export default function HomePage() {
   // Focus takes the task into its own card, so the task card only stands
   // alone without it. The time card is the last resort: only when there is
   // nothing else at all, not even an AI reading.
-  const showTaskCard = settings.showTasks && !settings.showFocus
+  // The card is on by default, so on a first launch it must not push the AI
+  // readings off a full glance: it yields when the cards would pass MAX_CARDS.
+  const otherCards = (showCompanion ? 1 : 0) + (media ? 1 : 0) + (settings.showFocus ? 1 : 0) + (settings.showStatus && (statusShown(privacy, battery) || statusPage === 'usage') ? 1 : 0)
+  const showTaskCard = settings.showTasks && !settings.showFocus && otherCards + shownLimits.length < MAX_CARDS
   const showTime = !showCompanion && !media && !showTaskCard && !settings.showFocus && shownLimits.length === 0
   const showStatus = settings.showStatus && (statusShown(privacy, battery) || statusPage === 'usage')
 
@@ -445,7 +456,10 @@ export default function HomePage() {
       <Head>
         <title>DeskNotch</title>
       </Head>
-      <div className="w-full h-full flex justify-center items-start pointer-events-none">
+      <div
+        className={`w-full h-full flex items-start pointer-events-none ${align === 'left' ? 'justify-start' : align === 'right' ? 'justify-end' : 'justify-center'}`}
+        style={{ padding: align === 'center' ? 0 : `0 ${EDGE_MARGIN}px` }}
+      >
         <div className="pointer-events-auto">
           <NotchChassis
             notchStyle={settings.notchStyle}
@@ -457,7 +471,7 @@ export default function HomePage() {
             )}
             expandedWidth={size.width}
             expandedHeight={size.height}
-            dockSide={settings.dockSide ?? 'bottom'}
+            dockSide={dockSideNow}
             keepOpen={holdOpen}
             belowSide={appsSide}
             below={

@@ -66,7 +66,10 @@ export function syncNotchWindows() {
 
   for (const display of targets) {
     const id = String(display.id)
-    const bounds = { x: display.bounds.x, y: display.bounds.y, width: display.bounds.width, height: stripHeight }
+    // The work area, not the whole screen: a taskbar on the top (or a side)
+    // takes its strip, and the notch sits below it instead of over it.
+    const { x, y, width } = display.workArea
+    const bounds = { x, y, width, height: stripHeight }
     const win = windows.get(id) ?? spare.pop() ?? createWindow(bounds)
     windows.set(id, win)
     const current = win.getBounds()
