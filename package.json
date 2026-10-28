@@ -5,6 +5,7 @@
   "description": "DeskNotch is an app for Windows that gives you a notch, just like the Apple devices",
   "version": "1.0.5",
   "author": "Devezio.tech",
+  "license": "MIT",
   "copyright": "Copyright © 2026 Devezio.tech",
   "appId": "com.devezio.desknotch",
   "type": "module",
