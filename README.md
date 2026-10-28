@@ -4,6 +4,8 @@
 
 **The MacBook notch, reimagined for Windows.**
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/yashsrivasta7a)
+
 DeskNotch sits at the top centre of your screen as a slim bar. Hover it, and it opens into your music, a focus timer with a small companion, your tasks, a shelf for files, your AI usage and the apps you use most. Move away, and it folds back out of your way.
 
 > **Beta.** DeskNotch is in public testing. Things may break; [feedback](#feedback) is very welcome.
