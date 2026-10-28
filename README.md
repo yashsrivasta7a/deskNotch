@@ -103,4 +103,4 @@ Found a bug or have an idea? [Open an issue](https://github.com/yashsrivasta7a/d
 
 ---
 
-Released under the [MIT License](LICENSE). Copyright © 2026 Devezio.tech · App ID `com.devezio.desknotch`
+Released under the [MIT License](LICENSE). Copyright © 2026 Devezio · App ID `com.devezio.desknotch`
