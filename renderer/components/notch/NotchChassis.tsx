@@ -7,8 +7,9 @@ import { DockSideContext, RailButton, railLabel, type DockSide } from './ViewSwi
  *  rail beside the notch, so the bar shrinks to a sliver of top margin. */
 export const BAR_CLOSED = 30
 export const BAR_OPEN = 6
-/** Closed and tucked behind a browser: a sliver at the screen's edge, still easy to hover. */
-const BAR_TUCKED = 6
+/** Closed and minimized/tucked on fullscreen or maximized apps: a slim hairline at the top edge. */
+const BAR_TUCKED = 5
+const WIDTH_TUCKED = 132
 /** The open notch's padding around its content: tight and even on every side
  *  (the sliver of bar plus PAD_TOP makes the top match). Views size themselves
  *  as content + CHROME_X / CHROME_Y. */
@@ -158,7 +159,16 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
   // the notch, so a pinned notch is just its content. Hovering brings them
   // back, and with them the lock to unpin.
   const showChrome = isOpen && (!isPinned || isHovered)
-  useEffect(() => onOpenChange?.(isOpen), [isOpen])
+  useEffect(() => {
+    onOpenChange?.(isOpen)
+    window.bridge?.send('notch:open', isOpen)
+  }, [isOpen])
+
+  // Main process sends `notch:enter` when the cursor enters the closed notch
+  // rect, guaranteeing hover-to-open even on the 5px minimized slim line.
+  useEffect(() => {
+    return window.bridge?.on('notch:enter', () => setIsHovered(true))
+  }, [])
 
   // Resolved after mount so server-rendered markup and the client agree.
   const [radius, setRadius] = useState({ closed: 11, open: 26 })
@@ -282,7 +292,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
       clearTimeout(late)
       clearInterval(tick)
     }
-  }, [isOpen, expandedWidth, expandedHeight, dockSide, belowSide])
+  }, [isOpen, expandedWidth, expandedHeight, dockSide, belowSide, sliver])
 
   useEffect(() => {
     window.bridge?.send('notch:pinned', isPinned)
@@ -321,7 +331,7 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
       onDragEnter={onEnter}
       initial={false}
       animate={{
-        width: isOpen ? expandedWidth : 240,
+        width: isOpen ? expandedWidth : sliver ? WIDTH_TUCKED : 240,
         height: isOpen ? expandedHeight : sliver ? BAR_TUCKED : BAR_CLOSED,
       }}
       transition={spring}
@@ -338,8 +348,8 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
         ref={mainRef}
         initial={false}
         animate={{
-          borderBottomLeftRadius: isOpen ? radius.open : radius.closed,
-          borderBottomRightRadius: isOpen ? radius.open : radius.closed,
+          borderBottomLeftRadius: isOpen ? radius.open : sliver ? 6 : radius.closed,
+          borderBottomRightRadius: isOpen ? radius.open : sliver ? 6 : radius.closed,
         }}
         transition={spring}
         className={`relative isolate w-full h-full text-white overflow-hidden flex flex-col
@@ -362,13 +372,17 @@ export const NotchChassis: React.FC<NotchChassisProps> = ({
           // No click-to-lock here: clicking the bar locked the notch open by
           // surprise. Locking is only the lock button on the dock.
           initial={false}
-          animate={{ height: isOpen ? BAR_OPEN : BAR_CLOSED }}
+          animate={{ height: isOpen ? BAR_OPEN : sliver ? BAR_TUCKED : BAR_CLOSED }}
           transition={spring}
-          className="shrink-0 flex items-center justify-between px-5 relative"
+          className={`shrink-0 flex items-center relative ${sliver ? 'justify-center px-0' : 'justify-between px-5'}`}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            {!sliver && (typeof children === 'function' ? children(isOpen) : children)}
-          </div>
+          {sliver ? (
+            <span className="h-[2px] w-9 rounded-full bg-white/30" />
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {typeof children === 'function' ? children(isOpen) : children}
+            </div>
+          )}
         </motion.div>
 
         <AnimatePresence>
