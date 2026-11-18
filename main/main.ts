@@ -24,6 +24,7 @@ if (isProd) {
 // clicks, per window (keyed by webContents id), as its renderer reports them.
 type Rect = { x: number; y: number; width: number; height: number }
 const notchBounds = new Map<number, Rect[]>()
+const notchOpen = new Set<number>()
 
 /** One notch strip across the top of a display. */
 const createNotchWindow = (bounds: Rect) => {
@@ -67,13 +68,14 @@ const createNotchWindow = (bounds: Rect) => {
 
     const { x, y } = screen.getCursorScreenPoint()
     const windowBounds = window.getBounds()
+    const isOpen = notchOpen.has(contentsId)
 
     const inside = (notchBounds.get(contentsId) ?? []).some(
       (r) =>
         x >= windowBounds.x + r.x &&
         x <= windowBounds.x + r.x + r.width &&
         y >= windowBounds.y + r.y &&
-        y <= windowBounds.y + r.y + r.height,
+        y <= windowBounds.y + r.y + Math.max(r.height, 6),
     )
 
     // Where the pointer is, relative to the strip, whenever it moves: the
@@ -88,6 +90,11 @@ const createNotchWindow = (bounds: Rect) => {
     if (inside === interactive) return
     interactive = inside
     window.setIgnoreMouseEvents(!inside, { forward: true })
+    // Guarantee hover-to-open even on the 5px minimized slim line if Windows
+    // drops DOM mouseenter during the setIgnoreMouseEvents transition.
+    if (inside && !isOpen) {
+      window.webContents.send('notch:enter')
+    }
   }
 
   // 60ms is under the threshold where a click feels like it missed, and cheap
@@ -96,6 +103,7 @@ const createNotchWindow = (bounds: Rect) => {
   window.on('closed', () => {
     clearInterval(hitTestTimer)
     notchBounds.delete(contentsId)
+    notchOpen.delete(contentsId)
   })
 
   if (isProd) {
@@ -115,6 +123,12 @@ app.whenReady().then(() => {
 
   ipcMain.on('notch:bounds', (event, bounds: Rect[] | Rect) => {
     notchBounds.set(event.sender.id, Array.isArray(bounds) ? bounds : [bounds])
+  })
+
+  ipcMain.on('notch:open', (event, open: boolean) => {
+    const id = event.sender.id
+    if (open) notchOpen.add(id)
+    else notchOpen.delete(id)
   })
 
   // Only take keyboard focus when the notch is pinned open, so merely hovering
