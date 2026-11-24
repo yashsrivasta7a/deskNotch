@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { BotAvatar, type BotAvatarType } from 'bot-avatars'
 import { Bot, ChevronDown, Heart, ImagePlus, LayoutGrid, PanelsTopLeft, Settings as Cog } from 'lucide-react'
@@ -71,6 +71,10 @@ export interface Settings {
   /** Shrink the closed notch to a sliver while a browser is in front, so it
    *  does not cover tabs; hovering opens it as usual. */
   tuckForBrowsers?: boolean
+  /** Shrink like that over every maximized app, so title bars stay visible. */
+  shrinkOverApps?: boolean
+  /** Or only over these apps, by process name ("Notion", "Figma"). */
+  shrinkApps?: string[]
   /** Leave the notch out of screenshots and screen sharing. */
   hideInScreenshots?: boolean
   /** The dock's buttons and icons, for screens where they come out small. */
@@ -107,6 +111,8 @@ export const DEFAULT_SETTINGS: Settings = {
   selectedDisplayId: 'primary',
   hideOnFullscreen: true,
   tuckForBrowsers: false,
+  shrinkOverApps: false,
+  shrinkApps: [],
   hideInScreenshots: false,
   dockSize: 'default',
 }
@@ -235,6 +241,57 @@ const Row: React.FC<{ title: string; detail?: string; children?: React.ReactNode
     {below && <div className="mt-2">{below}</div>}
   </div>
 )
+
+/** The apps to shrink over, picked from the ones open right now: tap one to
+ *  add it, tap a picked one to remove it. Stored by process name. */
+type RunningApp = { exe: string; name: string; icon: string | null }
+const AppPicker: React.FC<{ apps: string[]; onChange: (apps: string[]) => void }> = ({ apps, onChange }) => {
+  const [running, setRunning] = useState<RunningApp[] | null>(null)
+  useEffect(() => {
+    void window.bridge?.invoke<RunningApp[]>('apps:running').then((list) => setRunning(list ?? []))
+  }, [])
+  const picked = (exe: string) => apps.some((app) => app.toLowerCase() === exe.toLowerCase())
+  const info = (exe: string) => running?.find((app) => app.exe.toLowerCase() === exe.toLowerCase())
+  const others = (running ?? []).filter((app, i, all) => !picked(app.exe) && all.findIndex((a) => a.exe === app.exe) === i)
+
+  const chip = (exe: string, on: boolean) => {
+    const app = info(exe)
+    return (
+      <button
+        key={exe}
+        type="button"
+        aria-pressed={on}
+        title={on ? `Stop shrinking over ${app?.name ?? exe}` : `Shrink over ${app?.name ?? exe}`}
+        onClick={(event) => {
+          halt(event)
+          onChange(on ? apps.filter((a) => a.toLowerCase() !== exe.toLowerCase()) : [...apps, exe])
+        }}
+        className={`flex h-[24px] items-center gap-1.5 rounded-full px-2 text-[11px] transition-colors ${
+          on ? 'bg-white/[0.16] text-white hover:bg-white/[0.22]' : 'border border-dashed border-white/15 text-white/55 hover:text-white'
+        }`}
+      >
+        {app?.icon && <img src={app.icon} alt="" className="h-3.5 w-3.5" />}
+        {app?.name ?? exe}
+        <span className="text-white/40">{on ? '×' : '+'}</span>
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {apps.length > 0 && <div className="flex flex-wrap gap-1.5">{apps.map((exe) => chip(exe, true))}</div>}
+      <div className="flex flex-wrap gap-1.5">
+        {running === null ? (
+          <span className="text-[10.5px] text-white/35">Looking for open apps…</span>
+        ) : others.length ? (
+          others.map((app) => chip(app.exe, false))
+        ) : (
+          <span className="text-[10.5px] text-white/35">Open an app, then come back to add it.</span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /** Rows grouped on one card, hairlines between them, the way iOS groups settings. */
 const Group: React.FC<{ children: React.ReactNode; note?: string }> = ({ children, note }) => (
@@ -748,6 +805,16 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
           <Row title="Shrink over browsers" detail="Keeps browser tabs visible">
             <Switch label="Tuck behind browsers" on={settings.tuckForBrowsers ?? false} onChange={(v) => set('tuckForBrowsers', v)} />
           </Row>
+          <Row title="Shrink over all apps" detail="Keeps maximized apps' title bars visible">
+            <Switch label="Shrink over all apps" on={settings.shrinkOverApps ?? false} onChange={(v) => set('shrinkOverApps', v)} />
+          </Row>
+          {!settings.shrinkOverApps && (
+            <Row
+              title="Shrink over these apps"
+              detail="Pick from the apps open now"
+              below={<AppPicker apps={settings.shrinkApps ?? []} onChange={(v) => set('shrinkApps', v)} />}
+            />
+          )}
         </Group>
         </More>
       </>

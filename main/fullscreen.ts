@@ -60,15 +60,21 @@ public class FullscreenCheck {
 
     public const uint MONITOR_DEFAULTTONEAREST = 2;
 
-    // "fullscreen,monitorLeft,monitorTop,monitorRight,monitorBottom,exe" for
-    // the foreground window, or "self" when it is deskNotch (keep the state).
+    // "fullscreen,zoomed,touchesTop,monitorLeft,monitorTop,monitorRight,monitorBottom,exe"
+    // for the foreground window, or "self" / "keep" when deskNotch or a transient
+    // Windows overlay (Alt+Tab, Start, Task View) is focused.
     public static string Foreground() {
         IntPtr hwnd = GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return "0,0,0,0,0,";
+        if (hwnd == IntPtr.Zero) return "0,0,0,0,0,0,0,";
 
         StringBuilder className = new StringBuilder(256);
         GetClassName(hwnd, className, 256);
         string cls = className.ToString();
+        if (cls == "MultitaskingViewFrame" || cls == "TaskListThumbnailWnd" ||
+            cls == "XamlExplorerHostIslandWindow" || cls == "Windows.UI.Core.CoreWindow" ||
+            cls == "NotifyIconOverflowWindow" || cls == "TopLevelWindowForOverflowXamlIsland") {
+            return "keep";
+        }
         bool shell = cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd";
 
         StringBuilder title = new StringBuilder(256);
@@ -78,17 +84,19 @@ public class FullscreenCheck {
         IntPtr hMonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         MONITORINFO mi = new MONITORINFO();
         mi.cbSize = Marshal.SizeOf(typeof(MONITORINFO));
-        if (!GetMonitorInfo(hMonitor, ref mi)) return "0,0,0,0,0,";
+        if (!GetMonitorInfo(hMonitor, ref mi)) return "0,0,0,0,0,0,0,";
 
-        // Fullscreen is F11 or a video's fullscreen: the window exactly covers
-        // the monitor and is NOT maximized. A maximized window can cover it too
-        // (auto-hide taskbar, or its 8px border overshooting the work area),
-        // which is why IsZoomed is checked, not just the rect.
         bool fullscreen = false;
+        bool zoomed = false;
+        bool touchesTop = false;
         RECT rect;
-        if (!shell && !IsZoomed(hwnd) && GetWindowRect(hwnd, out rect)) {
-            fullscreen = rect.Left <= mi.rcMonitor.Left + 2 && rect.Top <= mi.rcMonitor.Top + 2
+        if (!shell && GetWindowRect(hwnd, out rect)) {
+            zoomed = IsZoomed(hwnd);
+            fullscreen = !zoomed && rect.Left <= mi.rcMonitor.Left + 2 && rect.Top <= mi.rcMonitor.Top + 2
                 && rect.Right >= mi.rcMonitor.Right - 2 && rect.Bottom >= mi.rcMonitor.Bottom - 2;
+            int monW = mi.rcMonitor.Right - mi.rcMonitor.Left;
+            int winW = rect.Right - rect.Left;
+            touchesTop = rect.Top <= mi.rcMonitor.Top + 4 && winW >= (int)(monW * 0.7);
         }
 
         string exe = "";
@@ -98,7 +106,8 @@ public class FullscreenCheck {
             exe = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
         } catch {}
 
-        return string.Format("{0},{1},{2},{3},{4},{5}", fullscreen ? 1 : 0,
+        return string.Format("{0},{1},{2},{3},{4},{5},{6},{7}",
+            fullscreen ? 1 : 0, zoomed ? 1 : 0, touchesTop ? 1 : 0,
             mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom, exe);
     }
 }
@@ -164,33 +173,44 @@ export function stopFullscreenWatch() {
  *  its PowerShell costs ~80 MB, not worth keeping for nothing. */
 export function checkAndApplyFullscreenState() {
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
-  if (settings.hideOnFullscreen === false && settings.tuckForBrowsers !== true) {
+  if (settings.hideOnFullscreen === false && settings.tuckForBrowsers !== true && settings.shrinkOverApps !== true && !shrinkList(settings).length) {
     stopFullscreenWatch()
     lastRawResult = ''
     // Nothing in front on any monitor: every notch shown and untucked.
-    handleFullscreenChange('0,0,0,0,0,')
+    handleFullscreenChange('0,0,0,0,0,0,0,')
     return
   }
   startFullscreenWatch()
-  handleFullscreenChange(lastRawResult)
+  if (lastRawResult) handleFullscreenChange(lastRawResult)
 }
+
+/** The apps picked in settings to shrink over, as lower-case process names. */
+const shrinkList = (settings: Record<string, unknown>) =>
+  (Array.isArray(settings.shrinkApps) ? settings.shrinkApps : []).map((name) => String(name).toLowerCase())
 
 /** Whether this notch is tucked right now, for a renderer that just loaded. */
 export const isTucked = (windowId: number) => tucked.get(windowId) ?? false
 
 function handleFullscreenChange(rawResult: string) {
-  // deskNotch itself in front (being hovered or clicked): leave everything as it was.
-  if (rawResult === 'self') return
-  const [flag, l, t, r, b, exe = ''] = rawResult.split(',')
+  // deskNotch itself or a transient OS overlay (Alt+Tab, Start): keep current state.
+  if (!rawResult || rawResult === 'self' || rawResult === 'keep') return
+  const parts = rawResult.split(',')
+  if (parts.length < 8) return
+  const [fsFlag, zoomedFlag, topFlag, l, t, r, b, exe = ''] = parts
   const monitor = [l, t, r, b].map(Number)
   // A half-written line leaves the notches as they are.
-  if ((flag !== '0' && flag !== '1') || monitor.some(isNaN)) return
+  if ((fsFlag !== '0' && fsFlag !== '1') || monitor.some(isNaN)) return
   lastRawResult = rawResult
 
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
   const hideOnFullscreen = settings.hideOnFullscreen !== false
   const tuckForBrowsers = settings.tuckForBrowsers === true
+  const shrinkHere = settings.shrinkOverApps === true || shrinkList(settings).includes(exe.toLowerCase())
   const browser = BROWSERS.has(exe.toLowerCase())
+
+  const isFullscreen = fsFlag === '1'
+  const isZoomed = zoomedFlag === '1'
+  const touchesTop = topFlag === '1'
 
   const displays = screen.getAllDisplays()
   for (const [id, window] of notchWindows()) {
@@ -201,14 +221,24 @@ function handleFullscreenChange(rawResult: string) {
       const { x, y, width, height } = display.bounds
       onDisplay = monitor[0] < x + width && monitor[2] > x && monitor[1] < y + height && monitor[3] > y
     }
-    const hide = hideOnFullscreen && flag === '1' && onDisplay
+
+    // Fullscreen (videos, games, F11) hides the notch outright: nothing should
+    // sit on top of it, not even the slim line.
+    const hide = hideOnFullscreen && isFullscreen && onDisplay
     if (hide && window.isVisible()) window.hide()
     else if (!hide && !window.isVisible()) restoreWindow(window)
 
-    const tuck = tuckForBrowsers && browser && onDisplay && !hide
-    if (isTucked(window.id) !== tuck) {
-      tucked.set(window.id, tuck)
-      window.webContents.send('notch:tucked', tuck)
+    // Otherwise shrink to the slim top-edge line: over browsers, and over a
+    // maximized or top-flush app (every app, or only the picked ones) so its
+    // title bar shows.
+    const shouldTuck =
+      onDisplay &&
+      !hide &&
+      ((tuckForBrowsers && browser) || (shrinkHere && (isZoomed || touchesTop)))
+
+    if (isTucked(window.id) !== shouldTuck) {
+      tucked.set(window.id, shouldTuck)
+      window.webContents.send('notch:tucked', shouldTuck)
     }
   }
 }
