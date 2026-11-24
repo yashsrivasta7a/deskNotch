@@ -844,20 +844,19 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             </button>
           )
         })}
-        {/* Sponsoring: not in the Store build, which keeps to the Store's own payment rules. */}
-        {!store && (
-          <button
-            type="button"
-            onClick={(event) => {
-              halt(event)
-              void window.bridge?.invoke('app:open-support')
-            }}
-            className="mt-auto flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
-          >
-            <Heart size={12} strokeWidth={2.2} />
-            Support
-          </button>
-        )}
+        {/* Sponsoring: a link out to GitHub Sponsors that unlocks nothing in the
+            app, which the Store allows as a voluntary donation. */}
+        <button
+          type="button"
+          onClick={(event) => {
+            halt(event)
+            void window.bridge?.invoke('app:open-support')
+          }}
+          className="mt-auto flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
+        >
+          <Heart size={12} strokeWidth={2.2} />
+          Support
+        </button>
         {/* The project's GitHub, at the foot of the sidebar whatever the section. */}
         <button
           type="button"
@@ -865,7 +864,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
             halt(event)
             void window.bridge?.invoke('app:open-repo')
           }}
-          className={`${store ? 'mt-auto ' : ''}flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white`}
+          className={`flex h-[28px] items-center gap-2 rounded-[9px] px-2.5 text-[12px] font-medium text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white`}
         >
           <GitHubMark />
           GitHub
