@@ -8,3 +8,7 @@ next-env.d.ts
 # build
 /app
 /dist
+
+# marketing / store assets (local only)
+/reel
+/resources/store

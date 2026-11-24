@@ -16,6 +16,12 @@ const isProd = process.env.NODE_ENV === 'production'
 
 const STRIP_HEIGHT = 500
 
+// Glass captures the screen. Chromium's default Windows Graphics Capture path
+// makes Windows draw a yellow border around the captured screen (issue #7);
+// the DXGI duplication fallback draws none and still honours content
+// protection, so the notch stays out of its own backdrop.
+app.commandLine.appendSwitch('disable-features', 'AllowWgcScreenCapturer')
+
 if (isProd) {
   serve({ directory: 'app' })
 }
