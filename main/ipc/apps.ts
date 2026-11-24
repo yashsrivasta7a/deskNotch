@@ -7,6 +7,7 @@
 import { ipcMain, shell } from 'electron'
 import { execFile, spawn } from 'child_process'
 import fs from 'fs'
+import { lastForegroundApp } from '../fullscreen'
 
 export interface TopApp {
   id: string
@@ -185,6 +186,7 @@ export function registerAppsIpc() {
 
   ipcMain.handle('apps:top', () => topApps())
   ipcMain.handle('apps:all', () => allApps())
+  ipcMain.handle('apps:foreground', () => lastForegroundApp())
   ipcMain.handle('apps:describe', (_event, ids: unknown) =>
     describeCached((Array.isArray(ids) ? ids : []).filter((id): id is string => typeof id === 'string').slice(0, 24)),
   )

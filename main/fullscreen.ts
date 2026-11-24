@@ -173,7 +173,7 @@ export function stopFullscreenWatch() {
  *  its PowerShell costs ~80 MB, not worth keeping for nothing. */
 export function checkAndApplyFullscreenState() {
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
-  if (settings.hideOnFullscreen === false && settings.tuckForBrowsers !== true && settings.shrinkOverApps !== true) {
+  if (settings.hideOnFullscreen === false && settings.tuckForBrowsers !== true && settings.shrinkOverApps !== true && !shrinkList(settings).length) {
     stopFullscreenWatch()
     lastRawResult = ''
     // Nothing in front on any monitor: every notch shown and untucked.
@@ -183,6 +183,15 @@ export function checkAndApplyFullscreenState() {
   startFullscreenWatch()
   if (lastRawResult) handleFullscreenChange(lastRawResult)
 }
+
+/** The apps picked in settings to shrink over, as lower-case process names. */
+const shrinkList = (settings: Record<string, unknown>) =>
+  (Array.isArray(settings.shrinkApps) ? settings.shrinkApps : []).map((name) => String(name).toLowerCase())
+
+/** The last app in front that was not deskNotch or the desktop, for settings'
+ *  quick add (by the time settings is clicked, deskNotch is in front). */
+let lastApp = ''
+export const lastForegroundApp = () => lastApp
 
 /** Whether this notch is tucked right now, for a renderer that just loaded. */
 export const isTucked = (windowId: number) => tucked.get(windowId) ?? false
@@ -197,11 +206,12 @@ function handleFullscreenChange(rawResult: string) {
   // A half-written line leaves the notches as they are.
   if ((fsFlag !== '0' && fsFlag !== '1') || monitor.some(isNaN)) return
   lastRawResult = rawResult
+  if (exe && exe.toLowerCase() !== 'explorer') lastApp = exe
 
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
   const hideOnFullscreen = settings.hideOnFullscreen !== false
   const tuckForBrowsers = settings.tuckForBrowsers === true
-  const shrinkOverApps = settings.shrinkOverApps === true
+  const shrinkHere = settings.shrinkOverApps === true || shrinkList(settings).includes(exe.toLowerCase())
   const browser = BROWSERS.has(exe.toLowerCase())
 
   const isFullscreen = fsFlag === '1'
@@ -224,12 +234,13 @@ function handleFullscreenChange(rawResult: string) {
     if (hide && window.isVisible()) window.hide()
     else if (!hide && !window.isVisible()) restoreWindow(window)
 
-    // Otherwise shrink to the slim top-edge line: over browsers, and, when
-    // asked for, over any maximized or top-flush app so its title bar shows.
+    // Otherwise shrink to the slim top-edge line: over browsers, and over a
+    // maximized or top-flush app (every app, or only the picked ones) so its
+    // title bar shows.
     const shouldTuck =
       onDisplay &&
       !hide &&
-      ((tuckForBrowsers && browser) || (shrinkOverApps && (isZoomed || touchesTop)))
+      ((tuckForBrowsers && browser) || (shrinkHere && (isZoomed || touchesTop)))
 
     if (isTucked(window.id) !== shouldTuck) {
       tucked.set(window.id, shouldTuck)

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { BotAvatar, type BotAvatarType } from 'bot-avatars'
 import { Bot, ChevronDown, Heart, ImagePlus, LayoutGrid, PanelsTopLeft, Settings as Cog } from 'lucide-react'
@@ -71,7 +71,10 @@ export interface Settings {
   /** Shrink the closed notch to a sliver while a browser is in front, so it
    *  does not cover tabs; hovering opens it as usual. */
   tuckForBrowsers?: boolean
+  /** Shrink like that over every maximized app, so title bars stay visible. */
   shrinkOverApps?: boolean
+  /** Or only over these apps, by process name ("Notion", "Figma"). */
+  shrinkApps?: string[]
   /** Leave the notch out of screenshots and screen sharing. */
   hideInScreenshots?: boolean
   /** The dock's buttons and icons, for screens where they come out small. */
@@ -109,6 +112,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideOnFullscreen: true,
   tuckForBrowsers: false,
   shrinkOverApps: false,
+  shrinkApps: [],
   hideInScreenshots: false,
   dockSize: 'default',
 }
@@ -237,6 +241,52 @@ const Row: React.FC<{ title: string; detail?: string; children?: React.ReactNode
     {below && <div className="mt-2">{below}</div>}
   </div>
 )
+
+/** The apps to shrink over: chips to remove, a name to type, and the app that
+ *  was in front before the notch opened, one click to add. */
+const AppPicker: React.FC<{ apps: string[]; onChange: (apps: string[]) => void }> = ({ apps, onChange }) => {
+  const [draft, setDraft] = useState('')
+  const [recent, setRecent] = useState('')
+  useEffect(() => {
+    void window.bridge?.invoke<string>('apps:foreground').then((exe) => setRecent(exe ?? ''))
+  }, [])
+  const has = (name: string) => apps.some((app) => app.toLowerCase() === name.toLowerCase())
+  const add = (name: string) => {
+    const clean = name.trim().replace(/\.exe$/i, '')
+    if (clean && !has(clean)) onChange([...apps, clean])
+    setDraft('')
+  }
+  const chip = 'flex h-[22px] items-center gap-1 rounded-full bg-white/[0.08] px-2.5 text-[11px] text-white/75'
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {apps.map((app) => (
+        <button key={app} type="button" title={`Remove ${app}`} onClick={(event) => {
+          halt(event)
+          onChange(apps.filter((a) => a !== app))
+        }} className={`${chip} hover:bg-white/[0.14] hover:text-white`}>
+          {app} <span className="text-white/40">×</span>
+        </button>
+      ))}
+      {recent && !has(recent) && (
+        <button type="button" onClick={(event) => {
+          halt(event)
+          add(recent)
+        }} className={`${chip} border border-dashed border-white/20 bg-transparent hover:text-white`}>
+          + {recent}
+        </button>
+      )}
+      <input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => event.key === 'Enter' && add(draft)}
+        onClick={halt}
+        placeholder="Add an app, e.g. Notion"
+        aria-label="Add an app to shrink over"
+        className="h-[22px] min-w-[120px] flex-1 rounded-full bg-white/[0.05] px-2.5 text-[11px] text-white/85 outline-none placeholder:text-white/30 focus:bg-white/[0.08]"
+      />
+    </div>
+  )
+}
 
 /** Rows grouped on one card, hairlines between them, the way iOS groups settings. */
 const Group: React.FC<{ children: React.ReactNode; note?: string }> = ({ children, note }) => (
@@ -753,6 +803,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
           <Row title="Shrink over all apps" detail="Keeps maximized apps' title bars visible">
             <Switch label="Shrink over all apps" on={settings.shrinkOverApps ?? false} onChange={(v) => set('shrinkOverApps', v)} />
           </Row>
+          {!settings.shrinkOverApps && (
+            <Row
+              title="Shrink over these apps"
+              detail="When they're maximized"
+              below={<AppPicker apps={settings.shrinkApps ?? []} onChange={(v) => set('shrinkApps', v)} />}
+            />
+          )}
         </Group>
         </More>
       </>
