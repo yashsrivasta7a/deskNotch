@@ -1,6 +1,6 @@
 appId: com.devezio.desknotch
 productName: DeskNotch
-copyright: Copyright © 2026 Devezio.tech
+copyright: Copyright © 2026 Devezio
 directories:
   output: dist
   buildResources: resources
