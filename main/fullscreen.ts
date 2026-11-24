@@ -173,7 +173,7 @@ export function stopFullscreenWatch() {
  *  its PowerShell costs ~80 MB, not worth keeping for nothing. */
 export function checkAndApplyFullscreenState() {
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
-  if (settings.hideOnFullscreen === false && settings.tuckForBrowsers !== true) {
+  if (settings.hideOnFullscreen === false && settings.tuckForBrowsers !== true && settings.shrinkOverApps !== true) {
     stopFullscreenWatch()
     lastRawResult = ''
     // Nothing in front on any monitor: every notch shown and untucked.
@@ -199,8 +199,9 @@ function handleFullscreenChange(rawResult: string) {
   lastRawResult = rawResult
 
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
-  const minimizeOnFullscreen = settings.hideOnFullscreen !== false
+  const hideOnFullscreen = settings.hideOnFullscreen !== false
   const tuckForBrowsers = settings.tuckForBrowsers === true
+  const shrinkOverApps = settings.shrinkOverApps === true
   const browser = BROWSERS.has(exe.toLowerCase())
 
   const isFullscreen = fsFlag === '1'
@@ -217,14 +218,18 @@ function handleFullscreenChange(rawResult: string) {
       onDisplay = monitor[0] < x + width && monitor[2] > x && monitor[1] < y + height && monitor[3] > y
     }
 
-    // Minimize into a slim top-edge hairline instead of hiding the window so
-    // browser tabs/videos stay unobstructed, Alt+Tab never flashes, and hovering
-    // the top edge expands the notch cleanly.
+    // Fullscreen (videos, games, F11) hides the notch outright: nothing should
+    // sit on top of it, not even the slim line.
+    const hide = hideOnFullscreen && isFullscreen && onDisplay
+    if (hide && window.isVisible()) window.hide()
+    else if (!hide && !window.isVisible()) restoreWindow(window)
+
+    // Otherwise shrink to the slim top-edge line: over browsers, and, when
+    // asked for, over any maximized or top-flush app so its title bar shows.
     const shouldTuck =
       onDisplay &&
-      ((minimizeOnFullscreen && (isFullscreen || isZoomed || touchesTop)) || (tuckForBrowsers && browser))
-
-    if (!window.isVisible()) restoreWindow(window)
+      !hide &&
+      ((tuckForBrowsers && browser) || (shrinkOverApps && (isZoomed || touchesTop)))
 
     if (isTucked(window.id) !== shouldTuck) {
       tucked.set(window.id, shouldTuck)

@@ -71,6 +71,7 @@ export interface Settings {
   /** Shrink the closed notch to a sliver while a browser is in front, so it
    *  does not cover tabs; hovering opens it as usual. */
   tuckForBrowsers?: boolean
+  shrinkOverApps?: boolean
   /** Leave the notch out of screenshots and screen sharing. */
   hideInScreenshots?: boolean
   /** The dock's buttons and icons, for screens where they come out small. */
@@ -107,6 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
   selectedDisplayId: 'primary',
   hideOnFullscreen: true,
   tuckForBrowsers: false,
+  shrinkOverApps: false,
   hideInScreenshots: false,
   dockSize: 'default',
 }
@@ -747,6 +749,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
           </Row>
           <Row title="Shrink over browsers" detail="Keeps browser tabs visible">
             <Switch label="Tuck behind browsers" on={settings.tuckForBrowsers ?? false} onChange={(v) => set('tuckForBrowsers', v)} />
+          </Row>
+          <Row title="Shrink over all apps" detail="Keeps maximized apps' title bars visible">
+            <Switch label="Shrink over all apps" on={settings.shrinkOverApps ?? false} onChange={(v) => set('shrinkOverApps', v)} />
           </Row>
         </Group>
         </More>
