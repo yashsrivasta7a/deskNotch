@@ -7,7 +7,6 @@
 import { ipcMain, shell } from 'electron'
 import { execFile, spawn } from 'child_process'
 import fs from 'fs'
-import { lastForegroundApp } from '../fullscreen'
 
 export interface TopApp {
   id: string
@@ -107,6 +106,34 @@ const describe = (ids: string[]) =>
     })
   })
 
+/** Apps with a window open right now, by process name, with their real name
+ *  and icon: the picker for which apps the notch shrinks over. */
+const RUNNING = `Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.Path } | Select-Object ProcessName, Path -Unique | ConvertTo-Json -Compress`
+// Windows' own processes (Explorer, Settings, input hosts) and overlays are not apps to pick.
+const HIDDEN = new Set(['electron', 'desknotch', 'nvidia overlay'])
+const isWindowsPart = (path: string) => /^[a-z]:\\windows\\/i.test(path)
+const runningApps = () =>
+  new Promise<{ exe: string; name: string; icon: string | null }[]>((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', RUNNING], { windowsHide: true }, async (error, stdout) => {
+      if (error || !stdout.trim()) return resolve([])
+      try {
+        const rows = [JSON.parse(stdout)].flat() as { ProcessName: string; Path: string }[]
+        const apps = rows.filter((row) => !HIDDEN.has(row.ProcessName.toLowerCase()) && !isWindowsPart(row.Path))
+        const named = await describeCached(apps.map((row) => row.Path))
+        resolve(
+          apps
+            .map((row) => {
+              const found = named.find((app) => app.id === row.Path)
+              return { exe: row.ProcessName, name: found?.name ?? row.ProcessName, icon: found?.icon ?? null }
+            })
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        )
+      } catch {
+        resolve([])
+      }
+    })
+  })
+
 const COUNT = 12
 const FRESH = 30 * 60_000
 let cache: { at: number; apps: TopApp[] } | null = null
@@ -186,7 +213,7 @@ export function registerAppsIpc() {
 
   ipcMain.handle('apps:top', () => topApps())
   ipcMain.handle('apps:all', () => allApps())
-  ipcMain.handle('apps:foreground', () => lastForegroundApp())
+  ipcMain.handle('apps:running', () => runningApps())
   ipcMain.handle('apps:describe', (_event, ids: unknown) =>
     describeCached((Array.isArray(ids) ? ids : []).filter((id): id is string => typeof id === 'string').slice(0, 24)),
   )

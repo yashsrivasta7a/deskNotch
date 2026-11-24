@@ -242,48 +242,53 @@ const Row: React.FC<{ title: string; detail?: string; children?: React.ReactNode
   </div>
 )
 
-/** The apps to shrink over: chips to remove, a name to type, and the app that
- *  was in front before the notch opened, one click to add. */
+/** The apps to shrink over, picked from the ones open right now: tap one to
+ *  add it, tap a picked one to remove it. Stored by process name. */
+type RunningApp = { exe: string; name: string; icon: string | null }
 const AppPicker: React.FC<{ apps: string[]; onChange: (apps: string[]) => void }> = ({ apps, onChange }) => {
-  const [draft, setDraft] = useState('')
-  const [recent, setRecent] = useState('')
+  const [running, setRunning] = useState<RunningApp[] | null>(null)
   useEffect(() => {
-    void window.bridge?.invoke<string>('apps:foreground').then((exe) => setRecent(exe ?? ''))
+    void window.bridge?.invoke<RunningApp[]>('apps:running').then((list) => setRunning(list ?? []))
   }, [])
-  const has = (name: string) => apps.some((app) => app.toLowerCase() === name.toLowerCase())
-  const add = (name: string) => {
-    const clean = name.trim().replace(/\.exe$/i, '')
-    if (clean && !has(clean)) onChange([...apps, clean])
-    setDraft('')
+  const picked = (exe: string) => apps.some((app) => app.toLowerCase() === exe.toLowerCase())
+  const info = (exe: string) => running?.find((app) => app.exe.toLowerCase() === exe.toLowerCase())
+  const others = (running ?? []).filter((app, i, all) => !picked(app.exe) && all.findIndex((a) => a.exe === app.exe) === i)
+
+  const chip = (exe: string, on: boolean) => {
+    const app = info(exe)
+    return (
+      <button
+        key={exe}
+        type="button"
+        aria-pressed={on}
+        title={on ? `Stop shrinking over ${app?.name ?? exe}` : `Shrink over ${app?.name ?? exe}`}
+        onClick={(event) => {
+          halt(event)
+          onChange(on ? apps.filter((a) => a.toLowerCase() !== exe.toLowerCase()) : [...apps, exe])
+        }}
+        className={`flex h-[24px] items-center gap-1.5 rounded-full px-2 text-[11px] transition-colors ${
+          on ? 'bg-white/[0.16] text-white hover:bg-white/[0.22]' : 'border border-dashed border-white/15 text-white/55 hover:text-white'
+        }`}
+      >
+        {app?.icon && <img src={app.icon} alt="" className="h-3.5 w-3.5" />}
+        {app?.name ?? exe}
+        <span className="text-white/40">{on ? '×' : '+'}</span>
+      </button>
+    )
   }
-  const chip = 'flex h-[22px] items-center gap-1 rounded-full bg-white/[0.08] px-2.5 text-[11px] text-white/75'
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {apps.map((app) => (
-        <button key={app} type="button" title={`Remove ${app}`} onClick={(event) => {
-          halt(event)
-          onChange(apps.filter((a) => a !== app))
-        }} className={`${chip} hover:bg-white/[0.14] hover:text-white`}>
-          {app} <span className="text-white/40">×</span>
-        </button>
-      ))}
-      {recent && !has(recent) && (
-        <button type="button" onClick={(event) => {
-          halt(event)
-          add(recent)
-        }} className={`${chip} border border-dashed border-white/20 bg-transparent hover:text-white`}>
-          + {recent}
-        </button>
-      )}
-      <input
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => event.key === 'Enter' && add(draft)}
-        onClick={halt}
-        placeholder="Add an app, e.g. Notion"
-        aria-label="Add an app to shrink over"
-        className="h-[22px] min-w-[120px] flex-1 rounded-full bg-white/[0.05] px-2.5 text-[11px] text-white/85 outline-none placeholder:text-white/30 focus:bg-white/[0.08]"
-      />
+    <div className="flex flex-col gap-2">
+      {apps.length > 0 && <div className="flex flex-wrap gap-1.5">{apps.map((exe) => chip(exe, true))}</div>}
+      <div className="flex flex-wrap gap-1.5">
+        {running === null ? (
+          <span className="text-[10.5px] text-white/35">Looking for open apps…</span>
+        ) : others.length ? (
+          others.map((app) => chip(app.exe, false))
+        ) : (
+          <span className="text-[10.5px] text-white/35">Open an app, then come back to add it.</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -806,7 +811,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, onChange
           {!settings.shrinkOverApps && (
             <Row
               title="Shrink over these apps"
-              detail="When they're maximized"
+              detail="Pick from the apps open now"
               below={<AppPicker apps={settings.shrinkApps ?? []} onChange={(v) => set('shrinkApps', v)} />}
             />
           )}

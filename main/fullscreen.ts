@@ -188,11 +188,6 @@ export function checkAndApplyFullscreenState() {
 const shrinkList = (settings: Record<string, unknown>) =>
   (Array.isArray(settings.shrinkApps) ? settings.shrinkApps : []).map((name) => String(name).toLowerCase())
 
-/** The last app in front that was not deskNotch or the desktop, for settings'
- *  quick add (by the time settings is clicked, deskNotch is in front). */
-let lastApp = ''
-export const lastForegroundApp = () => lastApp
-
 /** Whether this notch is tucked right now, for a renderer that just loaded. */
 export const isTucked = (windowId: number) => tucked.get(windowId) ?? false
 
@@ -206,7 +201,6 @@ function handleFullscreenChange(rawResult: string) {
   // A half-written line leaves the notches as they are.
   if ((fsFlag !== '0' && fsFlag !== '1') || monitor.some(isNaN)) return
   lastRawResult = rawResult
-  if (exe && exe.toLowerCase() !== 'explorer') lastApp = exe
 
   const settings = (readStore().settings ?? {}) as Record<string, unknown>
   const hideOnFullscreen = settings.hideOnFullscreen !== false
